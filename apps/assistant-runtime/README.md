@@ -12,18 +12,20 @@ Implemented now:
 - FastAPI runtime
 - `GET /api/v1/health`
 - `POST /api/v1/chat`
+- `GET /api/v1/sessions/{session_id}/messages`
+- SQLite-backed session/thread history
 - deterministic intent handling for:
   - stack health
   - online devices
   - temperature queries
   - light level queries
   - turning the relay on/off through Home OS tool routes
+- optional Ollama planner with deterministic fallback
 
 Not implemented yet:
 
 - STT
 - TTS
-- Ollama-based planning
 - memory
 - conversational session state
 
@@ -40,6 +42,24 @@ Copy-Item .env.example .env -ErrorAction SilentlyContinue
 ```
 
 If you leave `HOME_OS_EMAIL` and `HOME_OS_PASSWORD` blank, the runtime will fall back to the `DEFAULT_ADMIN_*` values in [hub-api/.env](e:/alicesystems/apps/hub-api/.env).
+
+If you want the assistant to use a local model first, set:
+
+```env
+ASSISTANT_MODE=auto
+OLLAMA_BASE_URL=http://127.0.0.1:11434
+OLLAMA_MODEL=<your-local-model>
+```
+
+`auto` means:
+
+- try Ollama planner first
+- fall back to deterministic mode if Ollama is unavailable or fails
+
+`deterministic` means:
+
+- skip Ollama entirely
+- use only the local rule-based tool selector
 
 ## Run
 
@@ -71,7 +91,8 @@ cd E:\alicesystems
 
 ```json
 {
-  "message": "turn on the bench light"
+  "message": "turn on the bench light",
+  "session_id": "sess_optional_existing_thread"
 }
 ```
 
@@ -86,9 +107,18 @@ Invoke-WebRequest `
   -UseBasicParsing
 ```
 
+Then inspect the thread:
+
+```powershell
+Invoke-WebRequest `
+  -Uri http://127.0.0.1:8010/api/v1/sessions/<session_id>/messages `
+  -UseBasicParsing
+```
+
 ## Known Gaps
 
 - deterministic parser only
 - no streaming responses
 - no voice pipeline yet
 - no memory layer yet
+- no Home OS tool plan beyond the current relay and reporting commands

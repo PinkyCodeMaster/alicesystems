@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import asyncio
 
-from assistant_runtime.models import Device, Entity, EntityState
+from assistant_runtime.core.config import Settings
+from assistant_runtime.models import Device, Entity, EntityState, SessionMessage
 from assistant_runtime.schemas import ChatResponse
 from assistant_runtime.services.assistant_service import AssistantService
+from assistant_runtime.services.ollama_planner import PlannerDecision
+from assistant_runtime.services.session_store import SessionStore
 
 
 class FakeGateway:
@@ -60,30 +63,89 @@ class FakeGateway:
         return {"topic": "alice/v1/device/dev_light_bench_01/cmd"}
 
 
-async def _chat(message: str) -> ChatResponse:
-    service = AssistantService(FakeGateway())
-    return await service.chat(message)
+class FakePlanner:
+    async def plan(
+        self,
+        *,
+        message: str,
+        recent_messages: list[SessionMessage],
+        devices: list[Device],
+        entities: list[Entity],
+        states: list[EntityState],
+    ) -> PlannerDecision:
+        assert recent_messages
+        return PlannerDecision(
+            action="turn_light_off",
+            reply="Planner chose to turn the bench light off.",
+            target_hint="Bench Light",
+        )
 
 
-def test_reports_online_devices():
-    response = asyncio.run(_chat("what devices are online"))
+def build_service(tmp_path, *, assistant_mode: str = "deterministic", planner=None) -> AssistantService:
+    settings = Settings(
+        assistant_mode=assistant_mode,
+        ollama_model="qwen2.5:3b",
+        session_store_file=str(tmp_path / "assistant.db"),
+    )
+    store = SessionStore(settings.session_store_path)
+    return AssistantService(
+        gateway=FakeGateway(),
+        settings=settings,
+        store=store,
+        planner=planner,
+    )
+
+
+async def _chat(service: AssistantService, message: str, session_id: str | None = None) -> ChatResponse:
+    return await service.chat(message=message, session_id=session_id)
+
+
+def test_reports_online_devices(tmp_path):
+    service = build_service(tmp_path)
+    response = asyncio.run(_chat(service, "what devices are online"))
     assert response.success is True
     assert "Bench Light" in response.reply
+    assert response.session_id.startswith("sess_")
 
 
-def test_reports_temperature():
-    response = asyncio.run(_chat("what is the temperature"))
+def test_reports_temperature(tmp_path):
+    service = build_service(tmp_path)
+    response = asyncio.run(_chat(service, "what is the temperature"))
     assert response.success is True
     assert "23.4 C" in response.reply
 
 
-def test_turns_light_on():
-    gateway = FakeGateway()
-    service = AssistantService(gateway)
-    response = asyncio.run(service.chat("turn on the bench light"))
+def test_turns_light_on(tmp_path):
+    service = build_service(tmp_path)
+    response = asyncio.run(_chat(service, "turn on the bench light"))
     assert response.success is True
-    assert gateway.last_command == (
+    assert service.gateway.last_command == (
         "ent_dev_light_bench_01_relay",
         "switch.set",
         {"on": True},
+    )
+
+
+def test_persists_session_history(tmp_path):
+    service = build_service(tmp_path)
+    first = asyncio.run(_chat(service, "what devices are online"))
+    second = asyncio.run(_chat(service, "what is the temperature", session_id=first.session_id))
+    messages = asyncio.run(service.list_messages(session_id=second.session_id))
+    assert len(messages) == 4
+    assert messages[0].role == "user"
+    assert messages[1].role == "assistant"
+    assert messages[2].role == "user"
+    assert messages[3].role == "assistant"
+
+
+def test_ollama_planner_can_choose_action(tmp_path):
+    service = build_service(tmp_path, assistant_mode="auto", planner=FakePlanner())
+    response = asyncio.run(_chat(service, "turn it off"))
+    assert response.mode == "ollama"
+    assert response.success is True
+    assert response.reply == "Planner chose to turn the bench light off."
+    assert service.gateway.last_command == (
+        "ent_dev_light_bench_01_relay",
+        "switch.set",
+        {"on": False},
     )

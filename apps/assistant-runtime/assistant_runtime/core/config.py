@@ -11,6 +11,12 @@ class Settings(BaseSettings):
     environment: str = "development"
     api_v1_prefix: str = "/api/v1"
     assistant_mode: str = "deterministic"
+    assistant_allow_fallback: bool = True
+    session_store_file: str = "./data/assistant.db"
+    session_history_window: int = 8
+    ollama_base_url: str = "http://127.0.0.1:11434"
+    ollama_model: str | None = None
+    ollama_timeout_seconds: float = 20.0
     home_os_base_url: str = "http://127.0.0.1:8000/api/v1"
     home_os_email: str | None = None
     home_os_password: str | None = None
@@ -25,6 +31,10 @@ class Settings(BaseSettings):
     @property
     def home_os_env_fallback_path(self) -> Path:
         return Path(self.home_os_env_fallback_file).resolve()
+
+    @property
+    def session_store_path(self) -> Path:
+        return Path(self.session_store_file).resolve()
 
 
 def load_fallback_home_os_credentials(settings: Settings) -> tuple[str | None, str | None]:
