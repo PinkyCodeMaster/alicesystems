@@ -2,13 +2,13 @@
 
 - Purpose: Developer workflow tooling for running Alice locally without juggling multiple terminals.
 - Responsibilities: Start local services, stream logs, expose serial output from bench hardware, and reduce friction during in-house debugging.
-- Interfaces: Supports `apps/hub-api`, local Mosquitto, and ESP32 USB serial monitoring.
+- Interfaces: Supports `apps/hub-api`, `apps/assistant-runtime`, `apps/web-dashboard`, local Mosquitto, and ESP32 USB serial monitoring.
 - Status: prototype.
 
 ## Current Tools
 
 - [alice_dev_console.py](e:/alicesystems/tools/dev/alice_dev_console.py): one-window developer console for `hub-api`, hub logs, optional broker logs, and one ESP32 serial port
-- [start-local-stack.ps1](e:/alicesystems/tools/dev/start-local-stack.ps1): starts Mosquitto, runs hub migrations, launches `hub-api`, and launches the Next.js dashboard
+- [start-local-stack.ps1](e:/alicesystems/tools/dev/start-local-stack.ps1): starts Mosquitto, runs hub migrations, launches `hub-api`, launches `assistant-runtime`, and launches the Next.js dashboard
 - [stop-local-stack.ps1](e:/alicesystems/tools/dev/stop-local-stack.ps1): stops the local broker plus the current `uvicorn` and `next dev` processes
 
 ## One-Window Dev Console
@@ -51,9 +51,10 @@ That will:
 - start Docker Mosquitto
 - run `alembic upgrade head`
 - open a PowerShell window for `hub-api`
+- open a PowerShell window for `assistant-runtime`
 - open a PowerShell window for `web-dashboard` with `bun run dev`
 
-Then power or reset the ESP32 boards so they reconnect to the broker and re-announce.
+The ESP32 boards should reconnect automatically if they are already powered. Manual reset is only for bench debugging.
 
 ## Stop The Full Local Stack
 
@@ -65,6 +66,7 @@ cd E:\alicesystems
 ## Dependencies
 
 - local `.alice` venv in `apps/hub-api`
+- local `.alice` venv in `apps/assistant-runtime`
 - `pyserial` installed through `requirements-dev.txt`
 - optional Docker Desktop for broker log streaming
 

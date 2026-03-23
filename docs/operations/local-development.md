@@ -2,17 +2,19 @@
 
 ## Purpose
 
-This document is the Windows-first local developer guide for Alice Systems. It gets a clean machine from zero to a working local `hub-api` instance with migrations, seed data, optional Mosquitto, and a repeatable reset path.
+This document is the Windows-first local developer guide for Alice Systems. It gets a clean machine from zero to a working local `hub-api`, `assistant-runtime`, dashboard, optional Mosquitto, and a repeatable reset path.
 
 ## Current Local Architecture
 
 Runs locally today:
 
 - `hub-api` FastAPI service
+- `assistant-runtime` FastAPI service
 - SQLite database
 - Alembic migrations
 - local seed data
 - optional Mosquitto broker via Docker Compose
+- `web-dashboard`
 
 Implemented and locally testable in code now:
 
@@ -27,7 +29,6 @@ Implemented and locally testable in code now:
 Not runnable yet:
 
 - `mobile-app`
-- `assistant-runtime`
 - live provisioning flow
 
 Prototype firmware now exists for:
@@ -106,9 +107,10 @@ This does all of the following:
 - starts Docker Mosquitto
 - runs hub migrations
 - launches `hub-api` in a new PowerShell window
+- launches `assistant-runtime` in a new PowerShell window
 - launches `web-dashboard` in a new PowerShell window
 
-After that, power the ESP32 boards or press `EN/RST` once on each board so they reconnect and publish `hello`.
+After that, the ESP32 boards should reconnect automatically. Use `EN/RST` only if you are bench-debugging a board that has stopped publishing.
 
 ### Local MQTT Broker
 
@@ -196,6 +198,26 @@ If you do not want separate manual steps, use:
 ```powershell
 cd E:\alicesystems
 .\tools\dev\start-local-stack.ps1
+```
+
+### Assistant Runtime
+
+```powershell
+cd E:\alicesystems\apps\assistant-runtime
+py -3.13 -m venv .alice
+.\.alice\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+pip install -r requirements-dev.txt
+Copy-Item .env.example .env -ErrorAction SilentlyContinue
+python -m uvicorn assistant_runtime.main:app --host 0.0.0.0 --port 8010
+```
+
+Helper script:
+
+```powershell
+cd E:\alicesystems\apps\assistant-runtime
+.\scripts\run-assistant.ps1
 ```
 
 ### Mobile App
@@ -293,8 +315,12 @@ If reset fails because the DB is locked, stop `uvicorn` or any Python process ho
 
 - API URL: `http://127.0.0.1:8000/api/v1`
 - LAN API URL: `http://192.168.0.29:8000/api/v1`
+- assistant URL: `http://127.0.0.1:8010/api/v1`
+- LAN assistant URL: `http://192.168.0.29:8010/api/v1`
 - Swagger UI: `http://127.0.0.1:8000/docs`
 - LAN Swagger UI: `http://192.168.0.29:8000/docs`
+- assistant docs: `http://127.0.0.1:8010/docs`
+- LAN assistant docs: `http://192.168.0.29:8010/docs`
 - OpenAPI JSON: `http://127.0.0.1:8000/openapi.json`
 - LAN health: `http://192.168.0.29:8000/api/v1/health`
 - web dashboard: `http://127.0.0.1:3000`
@@ -343,10 +369,10 @@ Not yet field-verified:
 - live Mosquitto plus live ESP32 LED/light node
 - retained state reconciliation
 - command acknowledgement handling
+- assistant runtime against live Home OS
 
 Not implemented yet:
 
-- local assistant runtime
 - mobile app
 - automation execution
 - provisioning flows

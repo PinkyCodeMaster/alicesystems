@@ -11,6 +11,7 @@ Write-Host "Stopping uvicorn and Next.js node processes" -ForegroundColor Cyan
 Get-CimInstance Win32_Process |
     Where-Object {
         ($_.Name -match "^python(\.exe)?$" -and $_.CommandLine -match "uvicorn app\.main:app") -or
+        ($_.Name -match "^python(\.exe)?$" -and $_.CommandLine -match "uvicorn assistant_runtime\.main:app") -or
         ($_.Name -match "^node(\.exe)?$" -and $_.CommandLine -match "next dev")
     } |
     ForEach-Object {

@@ -26,9 +26,10 @@ This starts the current local Alice stack:
 
 - Docker Mosquitto
 - `hub-api`
+- `assistant-runtime`
 - `web-dashboard`
 
-Then reset or power the ESP32 boards once so they reconnect and publish `hello`.
+The ESP32 boards should reconnect automatically. Manual reset is only for debugging or forcing a fresh `hello`.
 
 ## Quick MQTT Bring-Up
 
@@ -91,7 +92,9 @@ cd E:\alicesystems
 ## Local URLs
 
 - API base: `http://127.0.0.1:8000/api/v1`
+- assistant base: `http://127.0.0.1:8010/api/v1`
 - Swagger UI: `http://127.0.0.1:8000/docs`
+- assistant docs: `http://127.0.0.1:8010/docs`
 - OpenAPI JSON: `http://127.0.0.1:8000/openapi.json`
 - web dashboard: `http://127.0.0.1:3000`
 
@@ -109,10 +112,10 @@ cd E:\alicesystems
 
 - `hub-api`: runnable now
 - `mosquitto`: runnable now through Docker Compose
+- `assistant-runtime`: runnable now
 - `web-dashboard`: runnable now
 - `mobile-app`: not implemented yet
 - worker: not implemented yet
-- assistant runtime: not implemented yet
 
 ## Current Seeded Login
 
