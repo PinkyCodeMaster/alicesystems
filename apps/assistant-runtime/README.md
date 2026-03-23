@@ -21,6 +21,7 @@ Implemented now:
   - light level queries
   - turning the relay on/off through Home OS tool routes
 - optional Ollama planner with deterministic fallback
+- response debug block showing actual planner path and fallback status
 
 Not implemented yet:
 
@@ -87,6 +88,11 @@ cd E:\alicesystems
 - assistant health: `http://127.0.0.1:8010/api/v1/health`
 - assistant docs: `http://127.0.0.1:8010/docs`
 
+Health now includes dependency status for:
+
+- Home OS reachability
+- Ollama reachability
+
 ## Example Chat Request
 
 ```json
@@ -115,10 +121,16 @@ Invoke-WebRequest `
   -UseBasicParsing
 ```
 
+Inspect whether a reply came from Ollama or deterministic fallback in:
+
+- `mode`
+- `debug.planner_source`
+- `debug.fallback_used`
+- `debug.planner_error`
+
 ## Known Gaps
 
-- deterministic parser only
-- no streaming responses
 - no voice pipeline yet
+- no streaming responses
 - no memory layer yet
 - no Home OS tool plan beyond the current relay and reporting commands

@@ -25,6 +25,9 @@ Implemented and locally testable in code now:
 - MQTT command acknowledgement ingest
 - persisted auto-light settings API
 - offline device evaluation from last-seen timestamps
+- retained state rehydration after hub restart
+- dashboard stack health and device detail APIs
+- assistant sessions and Ollama planning fallback
 
 Not runnable yet:
 
@@ -220,6 +223,14 @@ cd E:\alicesystems\apps\assistant-runtime
 .\scripts\run-assistant.ps1
 ```
 
+If you want the assistant to use the local Ollama model first:
+
+```env
+ASSISTANT_MODE=auto
+OLLAMA_BASE_URL=http://127.0.0.1:11434
+OLLAMA_MODEL=qwen3:4b
+```
+
 ### Mobile App
 
 Not implemented yet. No runnable command exists.
@@ -321,6 +332,7 @@ If reset fails because the DB is locked, stop `uvicorn` or any Python process ho
 - LAN Swagger UI: `http://192.168.0.29:8000/docs`
 - assistant docs: `http://127.0.0.1:8010/docs`
 - LAN assistant docs: `http://192.168.0.29:8010/docs`
+- assistant session history: `http://127.0.0.1:8010/api/v1/sessions/<session_id>/messages`
 - OpenAPI JSON: `http://127.0.0.1:8000/openapi.json`
 - LAN health: `http://192.168.0.29:8000/api/v1/health`
 - web dashboard: `http://127.0.0.1:3000`
@@ -362,14 +374,14 @@ Working now:
 - persisted auto-light settings API
 - device offline timeout evaluation
 - Next.js web dashboard build
+- web dashboard login, stack health, device detail pages, and live invalidation refresh
+- assistant runtime health, chat, session history, and Ollama fallback path
+- live in-house ESP32 sensor + relay loop
+- OTA prototype firmware updates on both current boards
 
 Not yet field-verified:
 
-- live Mosquitto plus live ESP32 sensor node
-- live Mosquitto plus live ESP32 LED/light node
-- retained state reconciliation
-- command acknowledgement handling
-- assistant runtime against live Home OS
+- mobile app
 
 Not implemented yet:
 
@@ -407,8 +419,9 @@ Suggested first real test:
 
 Current status:
 
-- prototype integration path implemented
-- live in-house ESP32 verification is the next hardware milestone
+- live in-house sensor + relay verification completed
+- current known device IDs are `dev_sensor_hall_01` and `dev_light_bench_01`
+- retained restart recovery has been exercised successfully
 
 For the exact board flash and verification steps, use [esp32-bench-test.md](e:/alicesystems/docs/operations/esp32-bench-test.md).
 

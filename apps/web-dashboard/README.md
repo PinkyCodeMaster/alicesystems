@@ -39,16 +39,19 @@ in [`.env.local`](e:/alicesystems/apps/web-dashboard/.env.local).
 Implemented now:
 
 - local admin login
+- login-screen hub health check
+- stack health section
 - device list
+- device detail pages
 - entity list and current state
 - relay command buttons
 - recent audit history
 - auto-light settings editing
+- WebSocket-triggered refresh with polling fallback
 - light/dark/system theme toggle
 
 Not implemented yet:
 
-- live WebSocket updates
 - mobile-specific layouts
 - assistant UI
 - onboarding flows
@@ -56,6 +59,6 @@ Not implemented yet:
 
 ## Known Gaps
 
-- polling is still used instead of WebSocket streaming
+- current live refresh uses WebSocket invalidation plus polling fallback, not full state streaming
 - bad API targets still fail at runtime, but the login screen now shows the exact API target being used
 - `.env.local` changes require restarting `bun run dev`

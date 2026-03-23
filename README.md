@@ -9,3 +9,16 @@ This repository is the long-lived platform monorepo for Alice Systems.
 - Status: in progress.
 
 See [docs/architecture/alice-mvp-v1-blueprint.md](docs/architecture/alice-mvp-v1-blueprint.md) for the MVP system blueprint.
+
+## Current Working Slice
+
+Working locally today:
+
+- [hub-api](e:/alicesystems/apps/hub-api/README.md): FastAPI Home OS with SQLite, MQTT ingest, device/entity projection, stack health, and audit logging
+- [web-dashboard](e:/alicesystems/apps/web-dashboard/README.md): bun-based Next.js control surface with login, stack health, device detail views, relay control, and auto-light settings
+- [assistant-runtime](e:/alicesystems/apps/assistant-runtime/README.md): local assistant runtime with session history, deterministic tool routing, and Ollama planning with fallback
+- [operations docs](e:/alicesystems/docs/operations/README.md): Windows-first local start/stop, MQTT, OTA, and end-of-day status
+
+End-of-day project status for March 23, 2026:
+
+- [2026-03-23-status.md](e:/alicesystems/docs/operations/2026-03-23-status.md)

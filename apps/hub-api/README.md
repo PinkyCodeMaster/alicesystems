@@ -22,6 +22,10 @@ Implemented now:
 - offline evaluation from device last-seen timestamps
 - MQTT command acknowledgement ingest
 - persisted auto-light settings in SQLite
+- stack-health endpoint for dashboard/operator visibility
+- retained MQTT rehydration when state arrives before `hello`
+- device detail API for dashboard drill-down
+- WebSocket invalidation endpoint for dashboard refresh
 - MQTT ingest handlers for:
   - `hello`
   - `availability`
@@ -31,14 +35,15 @@ Implemented now:
 - device and entity projection from MQTT `hello`
 - Home OS command publish endpoint for writable entities
 - bulk entity-state endpoint for dashboard polling
+- live two-board house test completed with the current ESP32 sensor and relay nodes
 
 Not implemented yet:
 
 - real provisioning flow
 - production-safe signed OTA flow
 - automation engine
-- assistant runtime integration
-- WebSocket live state stream
+- full voice assistant pipeline
+- full live state streaming to UI beyond invalidation
 - mobile app code
 
 ## Dependencies
@@ -307,18 +312,23 @@ Running locally today:
 - optional Mosquitto broker via Docker Compose
 - `web-dashboard` Next.js app
 
-Implemented but only code-tested so far:
+Implemented and live-tested in-house:
 
 - MQTT message ingestion
 - Home OS command publish to writable entities
 - device/entity projection from MQTT `hello`
+- device availability updates
+- retained state reconciliation after hub restart
+- relay command acknowledgement ingestion
+- auto-light acting on live light sensor readings
+- dashboard stack health and device detail APIs
 
 Not implemented yet:
 
-- assistant runtime
 - mobile app
 - production-safe OTA
-- WebSocket streaming
+- full device provisioning
+- production device auth
 
 ## MQTT Contract For Current ESP32 Work
 
@@ -400,15 +410,18 @@ Current automated tests cover:
 - Home OS command publish endpoint behavior
 - persisted auto-light settings API
 - device offline timeout evaluation
+- stack health endpoint
+- retained-message rehydration handling
+- device detail endpoint shape
 
 Current gaps:
 
 - no live broker integration test in CI
-- no live ESP32 device test yet
+- no live ESP32 test in CI
 - no provisioning flow yet
 - no production OTA flow yet
 - no UI tests yet
-- no assistant integration tests yet
+- no end-to-end assistant integration tests in CI yet
 
 ## ESP32 Test Plan
 
@@ -427,8 +440,9 @@ Current plan:
 
 Current status:
 
-- prototype integration path implemented in `hub-api`
-- live device firmware integration still needs to be wired and tested in-house
+- current Home OS integration path implemented in `hub-api`
+- live in-house ESP32 sensor + relay integration verified
+- current working devices are `dev_sensor_hall_01` and `dev_light_bench_01`
 
 ## Founder Workflow
 
@@ -451,8 +465,8 @@ Required workflow for this repo:
 
 ## Next Steps
 
-- wire the two real ESP32 nodes to the MQTT contract above
-- implement live device registration and richer capability descriptors
-- add command acknowledgement and retained state reconciliation
-- start the web dashboard
-- start the mobile app
+- add production-grade provisioning and device auth
+- add signed OTA architecture
+- add richer automation rules and editing UX
+- deepen assistant tool coverage
+- add mobile app

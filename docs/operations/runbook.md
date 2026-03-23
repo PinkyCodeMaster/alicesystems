@@ -97,6 +97,7 @@ cd E:\alicesystems
 - assistant docs: `http://127.0.0.1:8010/docs`
 - OpenAPI JSON: `http://127.0.0.1:8000/openapi.json`
 - web dashboard: `http://127.0.0.1:3000`
+- assistant session history: `http://127.0.0.1:8010/api/v1/sessions/<session_id>/messages`
 
 ## Local Files
 
@@ -142,6 +143,33 @@ cd E:\alicesystems\apps\web-dashboard
 bun install
 Copy-Item .env.local.example .env.local -ErrorAction SilentlyContinue
 bun run dev
+```
+
+Current dashboard scope:
+
+- login
+- stack health
+- device list
+- device detail pages
+- relay control
+- audit view
+- auto-light settings
+
+## Assistant Runtime
+
+Current assistant scope:
+
+- Home OS health dependency checks
+- session-backed chat threads
+- deterministic tool routing
+- Ollama planner with fallback
+
+Suggested assistant `.env` for the current machine:
+
+```env
+ASSISTANT_MODE=auto
+OLLAMA_BASE_URL=http://127.0.0.1:11434
+OLLAMA_MODEL=qwen3:4b
 ```
 
 ## ESP32 Bench Test
