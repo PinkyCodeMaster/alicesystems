@@ -1,0 +1,91 @@
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs
+*.log
+logs/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+secrets/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.python-version
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+.venv/
+venv/
+dist/
+build/
+*.egg-info/
+
+# Node / JavaScript / TypeScript
+node_modules/
+.pnpm-store/
+.npm/
+.yarn/
+.next/
+.expo/
+.expo-shared/
+coverage/
+*.tsbuildinfo
+
+# SQLite and local data
+*.db
+*.db-shm
+*.db-wal
+data/
+
+# Docker / local runtime artifacts
+tmp/
+.cache/
+
+# ESP-IDF / embedded build outputs
+sdkconfig
+sdkconfig.old
+managed_components/
+build*/
+dependencies.lock
+flasher_args.json
+partition_table/
+*.bin
+*.elf
+*.map
+
+# Firmware / OTA artifacts
+artifacts/
+releases/
+
+# KiCad / CAD generated outputs
+*.kicad_prl
+*.kicad_pro-bak
+*-backups/
+gerbers/
+drill/
+plot/
+
+# Test and bench outputs
+reports/
+bench-output/
