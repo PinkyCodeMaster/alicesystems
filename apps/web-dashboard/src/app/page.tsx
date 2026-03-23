@@ -1,6 +1,7 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import {
   Activity,
   Cpu,
@@ -198,6 +199,11 @@ function formatCommandEventSummary(event: StackHealthCommandEvent | null): strin
   return `${command}${status}${target}`;
 }
 
+function buildDashboardWebSocketUrl(apiBaseUrl: string, token: string): string {
+  const origin = apiBaseUrl.replace(/\/api\/v1$/, "");
+  return `${origin.replace(/^http/, "ws")}/api/v1/ws/dashboard?token=${encodeURIComponent(token)}`;
+}
+
 function getStatusVariant(status: string) {
   switch (status.toLowerCase()) {
     case "online":
@@ -349,7 +355,7 @@ export default function DashboardPage() {
     };
   }, [apiBaseUrl]);
 
-  useEffect(() => {
+  const loadDashboard = useCallback(async () => {
     if (!token) {
       setUser(null);
       setDevices([]);
@@ -362,81 +368,99 @@ export default function DashboardPage() {
       return;
     }
 
-    let cancelled = false;
+    try {
+      const [
+        me,
+        deviceResponse,
+        entityResponse,
+        stateResponse,
+        auditResponse,
+        autoLightResponse,
+        stackHealthResponse,
+      ] = await Promise.all([
+        apiFetch<User>(apiBaseUrl, "/auth/me", token),
+        apiFetch<{ items: Device[] }>(apiBaseUrl, "/devices", token),
+        apiFetch<{ items: Entity[] }>(apiBaseUrl, "/entities", token),
+        apiFetch<{ items: EntityState[] }>(
+          apiBaseUrl,
+          "/entities/states",
+          token,
+        ),
+        apiFetch<{ items: AuditEvent[] }>(
+          apiBaseUrl,
+          "/audit-events?limit=25",
+          token,
+        ),
+        apiFetch<AutoLightSettings>(apiBaseUrl, "/system/auto-light", token),
+        apiFetch<StackHealth>(apiBaseUrl, "/system/stack-health", token),
+      ]);
 
-    const load = async () => {
+      setUser(me);
+      setDevices(deviceResponse.items);
+      setEntities(entityResponse.items);
+      setStates(
+        Object.fromEntries(
+          stateResponse.items.map((item) => [item.entity_id, item]),
+        ),
+      );
+      setAuditEvents(auditResponse.items);
+      setAutoLight(autoLightResponse);
+      setStackHealth(stackHealthResponse);
+      setDashboardError(null);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Unknown dashboard error";
+
+      setDashboardError(message);
+
+      if (
+        message.includes("401") ||
+        message.includes("Invalid") ||
+        message.includes("Missing bearer")
+      ) {
+        window.localStorage.removeItem(TOKEN_KEY);
+        setToken(null);
+      }
+    } finally {
+      setIsBootstrapping(false);
+    }
+  }, [apiBaseUrl, token]);
+
+  useEffect(() => {
+    void loadDashboard();
+    if (!token) {
+      return;
+    }
+
+    const interval = window.setInterval(() => void loadDashboard(), 30000);
+    return () => window.clearInterval(interval);
+  }, [loadDashboard, token]);
+
+  useEffect(() => {
+    if (!token) {
+      return;
+    }
+
+    const websocket = new WebSocket(buildDashboardWebSocketUrl(apiBaseUrl, token));
+    websocket.onmessage = (event) => {
       try {
-        const [
-          me,
-          deviceResponse,
-          entityResponse,
-          stateResponse,
-          auditResponse,
-          autoLightResponse,
-          stackHealthResponse,
-        ] = await Promise.all([
-          apiFetch<User>(apiBaseUrl, "/auth/me", token),
-          apiFetch<{ items: Device[] }>(apiBaseUrl, "/devices", token),
-          apiFetch<{ items: Entity[] }>(apiBaseUrl, "/entities", token),
-          apiFetch<{ items: EntityState[] }>(
-            apiBaseUrl,
-            "/entities/states",
-            token,
-          ),
-          apiFetch<{ items: AuditEvent[] }>(
-            apiBaseUrl,
-            "/audit-events?limit=25",
-            token,
-          ),
-          apiFetch<AutoLightSettings>(apiBaseUrl, "/system/auto-light", token),
-          apiFetch<StackHealth>(apiBaseUrl, "/system/stack-health", token),
-        ]);
-
-        if (cancelled) return;
-
-        setUser(me);
-        setDevices(deviceResponse.items);
-        setEntities(entityResponse.items);
-        setStates(
-          Object.fromEntries(
-            stateResponse.items.map((item) => [item.entity_id, item]),
-          ),
-        );
-        setAuditEvents(auditResponse.items);
-        setAutoLight(autoLightResponse);
-        setStackHealth(stackHealthResponse);
-        setDashboardError(null);
-      } catch (error) {
-        if (cancelled) return;
-
-        const message =
-          error instanceof Error ? error.message : "Unknown dashboard error";
-
-        setDashboardError(message);
-
-        if (
-          message.includes("401") ||
-          message.includes("Invalid") ||
-          message.includes("Missing bearer")
-        ) {
-          window.localStorage.removeItem(TOKEN_KEY);
-          setToken(null);
+        const payload = JSON.parse(event.data) as { type?: string };
+        if (payload.type && payload.type !== "ping" && payload.type !== "connected") {
+          void loadDashboard();
         }
-      } finally {
-        if (!cancelled) {
-          setIsBootstrapping(false);
-        }
+      } catch {
+        void loadDashboard();
       }
     };
 
-    void load();
-    const interval = window.setInterval(() => void load(), 5000);
+    websocket.onerror = () => {
+      // Keep the fallback polling path active even if WS is unavailable.
+    };
 
     return () => {
-      cancelled = true;
-      window.clearInterval(interval);
+      websocket.close();
     };
-  }, [apiBaseUrl, token]);
+  }, [apiBaseUrl, loadDashboard, token]);
 
   const login = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -883,7 +907,12 @@ export default function DashboardPage() {
                       {devices.map((device) => (
                         <TableRow key={device.id}>
                           <TableCell className="min-w-[280px] align-top">
-                            <div className="font-medium">{device.name}</div>
+                            <Link
+                              className="font-medium underline-offset-4 hover:underline"
+                              href={`/devices/${device.id}`}
+                            >
+                              {device.name}
+                            </Link>
                             <div className="text-xs text-muted-foreground">
                               {device.id} · {device.model} · fw{" "}
                               {device.fw_version ?? "unknown"}

@@ -26,3 +26,12 @@ class AuditEventRepository:
             .limit(limit)
         )
         return list(self.db.scalars(stmt))
+
+    def list_recent_for_target(self, *, target_id: str, limit: int = 50) -> list[AuditEvent]:
+        stmt = (
+            select(AuditEvent)
+            .where(AuditEvent.target_id == target_id)
+            .order_by(AuditEvent.created_at.desc())
+            .limit(limit)
+        )
+        return list(self.db.scalars(stmt))

@@ -551,6 +551,78 @@ def test_stack_health_reports_broker_devices_and_latest_ack() -> None:
     assert body["latest_command_ack"]["metadata"]["status"] == "applied"
 
 
+def test_mqtt_retained_state_rehydrates_after_hello() -> None:
+    with TemporaryDirectory() as tmp_dir:
+        settings = _build_settings(tmp_dir)
+        with TestClient(create_app(settings)):
+            session = get_session_factory()()
+            try:
+                service = MqttIngestService(session)
+                service.process_message(
+                    "alice/v1/device/dev_sensor_hall_01/state",
+                    '{"capability":"temperature","celsius":22.4}',
+                )
+                service.process_message(
+                    "alice/v1/device/dev_sensor_hall_01/hello",
+                    """
+                    {
+                      "name": "Hall Sensor",
+                      "model": "alice.sensor.env.s1",
+                      "device_type": "sensor_node",
+                      "fw_version": "0.1.1",
+                      "capabilities": [
+                        {"capability_id": "temperature", "kind": "sensor.temperature", "name": "Temperature", "slug": "temperature", "writable": 0, "traits": {"unit": "C"}}
+                      ]
+                    }
+                    """,
+                )
+            finally:
+                session.close()
+
+            session = get_session_factory()()
+            try:
+                from app.repositories.entity_repository import EntityRepository
+                from app.repositories.entity_state_repository import EntityStateRepository
+
+                entity = EntityRepository(session).get_by_device_and_capability(
+                    "dev_sensor_hall_01", "temperature"
+                )
+                state = EntityStateRepository(session).get(entity.id if entity else "")
+            finally:
+                session.close()
+
+    assert entity is not None
+    assert state is not None
+    assert '"celsius": 22.4' in state.value_json
+
+
+def test_dashboard_websocket_receives_audit_events() -> None:
+    with TemporaryDirectory() as tmp_dir:
+        settings = _build_settings(tmp_dir)
+        with TestClient(create_app(settings)) as client:
+            headers = _auth_headers(client, settings)
+            token = headers["Authorization"].removeprefix("Bearer ").strip()
+            entity_id = _seed_entity()
+
+            with client.websocket_connect(f"/api/v1/ws/dashboard?token={token}") as websocket:
+                first = websocket.receive_json()
+                assert first["type"] == "connected"
+
+                response = client.put(
+                    f"/api/v1/entities/{entity_id}/state",
+                    json={"value": {"on": True}, "source": "manual_test"},
+                    headers=headers,
+                )
+                assert response.status_code == 200
+
+                event = websocket.receive_json()
+                while event.get("type") == "ping":
+                    event = websocket.receive_json()
+
+    assert event["type"] == "audit_event"
+    assert event["action"] == "entity_state.updated"
+
+
 def test_sync_default_admin_updates_existing_admin_from_env_values() -> None:
     with TemporaryDirectory() as tmp_dir:
         settings = _build_settings(tmp_dir)

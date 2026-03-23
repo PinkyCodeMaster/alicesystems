@@ -19,6 +19,10 @@ class EntityRepository:
         stmt = select(Entity).where(Entity.device_id == device_id, Entity.capability_id == capability_id)
         return self.db.scalar(stmt)
 
+    def list_by_device(self, device_id: str) -> list[Entity]:
+        stmt = select(Entity).where(Entity.device_id == device_id).order_by(Entity.name)
+        return list(self.db.scalars(stmt).all())
+
     def save(self, entity: Entity) -> Entity:
         self.db.add(entity)
         self.db.commit()

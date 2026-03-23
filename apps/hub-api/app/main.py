@@ -1,3 +1,4 @@
+import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 import json
@@ -8,10 +9,13 @@ from uuid import uuid4
 from app.api.router import api_router
 from app.core.config import Settings, get_settings, set_settings_override
 from app.core.db import close_engine, init_db
+from app.core.db import get_session_factory
+from app.core.events import event_bus
 from app.core.logging import close_logging, configure_logging
 from app.core.mqtt import start_mqtt, stop_mqtt
+from app.services.auth_service import AuthService
 from app.services.bootstrap_service import bootstrap_defaults
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect, status
 from fastapi.middleware.cors import CORSMiddleware
 
 logger = logging.getLogger(__name__)
@@ -147,6 +151,38 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return response
 
     app.include_router(api_router, prefix=settings.api_v1_prefix)
+
+    @app.websocket(f"{settings.api_v1_prefix}/ws/dashboard")
+    async def dashboard_events(websocket: WebSocket) -> None:
+        token = websocket.query_params.get("token")
+        if not token:
+            await websocket.close(code=4401, reason="Missing token")
+            return
+
+        session = get_session_factory()()
+        try:
+            user = AuthService(session).get_user_from_token(token)
+        finally:
+            session.close()
+
+        if user is None:
+            await websocket.close(code=4401, reason="Invalid token")
+            return
+
+        await websocket.accept()
+        await websocket.send_json({"type": "connected", "user_id": user.id})
+        queue = event_bus.connect()
+        try:
+            while True:
+                try:
+                    event = await asyncio.wait_for(queue.get(), timeout=20)
+                    await websocket.send_json(event)
+                except TimeoutError:
+                    await websocket.send_json({"type": "ping"})
+        except WebSocketDisconnect:
+            return
+        finally:
+            event_bus.disconnect(queue)
 
     return app
 

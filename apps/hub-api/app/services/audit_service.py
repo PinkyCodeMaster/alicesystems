@@ -3,6 +3,7 @@ import json
 import logging
 from uuid import uuid4
 
+from app.core.events import event_bus
 from sqlalchemy.orm import Session
 
 from app.domain.audit_event import AuditEvent
@@ -53,10 +54,25 @@ class AuditService:
             "Audit event recorded",
             extra={"event": event_payload},
         )
-        return self.repo.create(event)
+        saved = self.repo.create(event)
+        event_bus.publish(
+            {
+                "type": "audit_event",
+                "action": saved.action,
+                "target_id": saved.target_id,
+                "actor_id": saved.actor_id,
+                "severity": saved.severity,
+                "created_at": saved.created_at.isoformat(),
+                "metadata": event_payload["metadata"],
+            }
+        )
+        return saved
 
     def list_recent(self, limit: int = 50) -> list[AuditEvent]:
         return self.repo.list_recent(limit=limit)
 
     def list_recent_by_action(self, *, action: str, limit: int = 50) -> list[AuditEvent]:
         return self.repo.list_recent_by_action(action=action, limit=limit)
+
+    def list_recent_for_target(self, *, target_id: str, limit: int = 50) -> list[AuditEvent]:
+        return self.repo.list_recent_for_target(target_id=target_id, limit=limit)

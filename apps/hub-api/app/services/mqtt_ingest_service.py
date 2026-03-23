@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 import json
 import re
+from threading import Lock
 
 from sqlalchemy.orm import Session
 
@@ -15,6 +16,9 @@ _DEVICE_TOPIC_RE = re.compile(
     r"^(?P<prefix>.+)/device/(?P<device_id>[^/]+)/(?P<message_type>hello|availability|telemetry|state|ack)$"
 )
 _META_KEYS = {"msg_id", "ts", "schema", "device_id", "fw_version", "boot_id"}
+_PENDING_RETAINED: dict[str, list[tuple[str, dict | str]]] = {}
+_PENDING_LOCK = Lock()
+_MAX_PENDING_PER_DEVICE = 12
 
 
 class MqttIngestService:
@@ -46,19 +50,22 @@ class MqttIngestService:
     def _handle_hello(self, *, device_id: str, payload: dict) -> None:
         body = self._body(payload)
         self.device_registry.upsert_from_hello(device_id=device_id, payload=body)
+        self._drain_pending(device_id=device_id)
 
     def _handle_availability(self, *, device_id: str, payload) -> None:
         if isinstance(payload, dict):
             status = str(self._body(payload).get("status", "online"))
         else:
             status = str(payload)
-        self.device_registry.update_availability(device_id=device_id, status=status)
+        updated = self.device_registry.update_availability(device_id=device_id, status=status)
+        if updated is None:
+            self._queue_pending(device_id=device_id, message_type="availability", payload=payload)
 
     def _handle_ack(self, *, device_id: str, payload: dict) -> None:
         body = self._body(payload)
         device = self.device_registry.mark_seen(device_id=device_id, status="online")
         if device is None:
-            self._record_unmapped(device_id=device_id, source="mqtt.ack", reason="unknown_device")
+            self._queue_pending(device_id=device_id, message_type="ack", payload=payload)
             return
 
         target_entity_id = body.get("target_entity_id")
@@ -90,7 +97,7 @@ class MqttIngestService:
 
         device = self.device_registry.get_device(device_id)
         if device is None:
-            self._record_unmapped(device_id=device_id, source=source, reason="unknown_device")
+            self._queue_pending(device_id=device_id, message_type=source.removeprefix("mqtt."), payload=payload)
             return
 
         entity = self.entity_repo.get_by_device_and_capability(device_id, capability_id)
@@ -129,6 +136,33 @@ class MqttIngestService:
             return json.loads(payload_text)
         except json.JSONDecodeError:
             return payload_text.strip()
+
+    def _queue_pending(self, *, device_id: str, message_type: str, payload: dict | str) -> None:
+        with _PENDING_LOCK:
+            queue = _PENDING_RETAINED.setdefault(device_id, [])
+            queue.append((message_type, payload))
+            if len(queue) > _MAX_PENDING_PER_DEVICE:
+                del queue[0 : len(queue) - _MAX_PENDING_PER_DEVICE]
+
+    def _drain_pending(self, *, device_id: str) -> None:
+        with _PENDING_LOCK:
+            pending = _PENDING_RETAINED.pop(device_id, [])
+
+        if not pending:
+            return
+
+        priority = {"availability": 0, "telemetry": 1, "state": 1, "ack": 2}
+        for message_type, payload in sorted(pending, key=lambda item: priority.get(item[0], 99)):
+            if message_type == "availability":
+                self._handle_availability(device_id=device_id, payload=payload)
+            elif message_type == "ack":
+                self._handle_ack(device_id=device_id, payload=payload if isinstance(payload, dict) else {"value": payload})
+            else:
+                self._handle_state_like(
+                    device_id=device_id,
+                    payload=payload if isinstance(payload, dict) else {"value": payload},
+                    source=f"mqtt.{message_type}",
+                )
 
     def _body(self, payload):
         if isinstance(payload, dict) and isinstance(payload.get("body"), dict):

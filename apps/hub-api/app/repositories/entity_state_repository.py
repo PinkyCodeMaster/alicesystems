@@ -12,6 +12,12 @@ class EntityStateRepository:
         stmt = select(EntityState).where(EntityState.entity_id == entity_id)
         return self.db.scalar(stmt)
 
+    def list_by_entity_ids(self, entity_ids: list[str]) -> list[EntityState]:
+        if not entity_ids:
+            return []
+        stmt = select(EntityState).where(EntityState.entity_id.in_(entity_ids))
+        return list(self.db.scalars(stmt).all())
+
     def save(self, state: EntityState) -> EntityState:
         self.db.add(state)
         self.db.commit()
