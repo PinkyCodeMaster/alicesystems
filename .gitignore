@@ -74,6 +74,12 @@ partition_table/
 *.elf
 *.map
 
+# PlatformIO / Arduino prototype outputs
+.pio/
+.pioenvs/
+.piolibdeps/
+firmware/**/include/secrets.h
+
 # Firmware / OTA artifacts
 artifacts/
 releases/
