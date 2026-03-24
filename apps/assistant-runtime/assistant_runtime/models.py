@@ -33,6 +33,33 @@ class EntityState:
 
 
 @dataclass
+class AutoLightSettings:
+    enabled: bool
+    sensor_entity_id: str | None
+    target_entity_id: str | None
+    mode: str
+    on_lux: float
+    off_lux: float
+    on_raw: float
+    off_raw: float
+    source: str
+    updated_at: str | None
+
+
+@dataclass
+class AuditEvent:
+    id: str
+    actor_type: str
+    actor_id: str | None
+    action: str
+    target_type: str
+    target_id: str | None
+    severity: str
+    metadata_json: str
+    created_at: str
+
+
+@dataclass
 class SessionMessage:
     id: int
     session_id: str

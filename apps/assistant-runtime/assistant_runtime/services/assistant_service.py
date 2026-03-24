@@ -202,6 +202,85 @@ class AssistantService:
                 ),
             )
 
+        if action == "show_auto_light_status":
+            settings = await self.gateway.get_auto_light_settings()
+            traces.append(ToolTrace(tool="system.auto_light.get", status="ok", detail="Fetched auto-light settings"))
+            status = "enabled" if settings.enabled else "disabled"
+            reply = planner_reply or (
+                f"Auto-light is {status}. "
+                f"Mode: {settings.mode}. "
+                f"Sensor: {settings.sensor_entity_id or 'not set'}. "
+                f"Target: {settings.target_entity_id or 'not set'}. "
+                f"Thresholds: on raw {settings.on_raw}, off raw {settings.off_raw}, on lux {settings.on_lux}, off lux {settings.off_lux}."
+            )
+            return ChatResponse(
+                session_id="",
+                mode=mode,
+                success=True,
+                reply=reply,
+                tool_traces=traces,
+                debug=self._build_debug(
+                    response_mode=mode,
+                    planner_source=("ollama" if mode == "ollama" else "deterministic"),
+                    fallback_used=False,
+                    planner_error=None,
+                ),
+            )
+
+        if action in {"enable_auto_light", "disable_auto_light"}:
+            enabled = action == "enable_auto_light"
+            settings = await self.gateway.update_auto_light_enabled(enabled=enabled)
+            traces.append(
+                ToolTrace(
+                    tool="system.auto_light.put",
+                    status="ok",
+                    detail=f"{'Enabled' if enabled else 'Disabled'} auto-light",
+                )
+            )
+            reply = planner_reply or (
+                f"Auto-light is now {'enabled' if settings.enabled else 'disabled'}. "
+                f"Mode: {settings.mode}. "
+                f"Target: {settings.target_entity_id or 'not set'}."
+            )
+            return ChatResponse(
+                session_id="",
+                mode=mode,
+                success=True,
+                reply=reply,
+                tool_traces=traces,
+                debug=self._build_debug(
+                    response_mode=mode,
+                    planner_source=("ollama" if mode == "ollama" else "deterministic"),
+                    fallback_used=False,
+                    planner_error=None,
+                ),
+            )
+
+        if action == "list_recent_audit_events":
+            events = await self.gateway.list_audit_events(limit=5)
+            traces.append(ToolTrace(tool="audit.list", status="ok", detail=f"Loaded {len(events)} audit events"))
+            if not events:
+                reply = planner_reply or "There are no recent audit events."
+            else:
+                parts = [
+                    f"{event.action} on {event.target_id or event.target_type} at {event.created_at}"
+                    for event in events[:5]
+                ]
+                reply = planner_reply or ("Recent audit events: " + "; ".join(parts) + ".")
+            return ChatResponse(
+                session_id="",
+                mode=mode,
+                success=True,
+                reply=reply,
+                tool_traces=traces,
+                debug=self._build_debug(
+                    response_mode=mode,
+                    planner_source=("ollama" if mode == "ollama" else "deterministic"),
+                    fallback_used=False,
+                    planner_error=None,
+                ),
+            )
+
         context = context or await self._load_context(traces)
 
         if action == "list_online_devices":
@@ -345,8 +424,8 @@ class AssistantService:
             mode="deterministic" if mode != "ollama" else mode,
             success=False,
             reply=(
-                "I can currently list online devices, report temperature or light readings, "
-                "show stack health, and turn the light relay on or off."
+                "I can currently show stack health, list online devices, report temperature or light readings, "
+                "turn the light relay on or off, show or toggle auto-light, and list recent audit events."
             ),
             tool_traces=traces,
             debug=self._build_debug(
@@ -386,8 +465,32 @@ class AssistantService:
         return AssistantContext(devices=devices, entities=entities, states=states)
 
     def _infer_deterministic_action(self, lowered: str) -> str:
+        normalized = lowered.replace("-", " ")
         if any(phrase in lowered for phrase in ("stack health", "system health", "hub health")):
             return "stack_health"
+        if "auto light" in normalized or "automatic light" in normalized:
+            if any(
+                phrase in normalized
+                for phrase in (
+                    "is auto light",
+                    "is automatic light",
+                    "auto light status",
+                    "auto light settings",
+                    "auto light enabled",
+                    "auto light disabled",
+                )
+            ):
+                return "show_auto_light_status"
+            if any(term in normalized for term in ("turn on", "switch on", "enable")):
+                return "enable_auto_light"
+            if any(term in normalized for term in ("turn off", "switch off", "disable")):
+                return "disable_auto_light"
+            return "show_auto_light_status"
+        if any(
+            phrase in normalized
+            for phrase in ("recent events", "recent activity", "latest events", "event log", "activity log", "audit")
+        ) or normalized.startswith("what happened"):
+            return "list_recent_audit_events"
         if any(phrase in lowered for phrase in ("devices online", "what devices are online", "which devices are online")):
             return "list_online_devices"
         if "temperature" in lowered or "temp" in lowered:

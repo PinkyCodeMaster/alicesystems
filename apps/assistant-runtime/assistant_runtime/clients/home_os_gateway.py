@@ -6,7 +6,7 @@ from typing import Any
 import httpx
 
 from assistant_runtime.core.config import Settings, load_fallback_home_os_credentials
-from assistant_runtime.models import Device, Entity, EntityState
+from assistant_runtime.models import AuditEvent, AutoLightSettings, Device, Entity, EntityState
 
 
 class HomeOsGateway:
@@ -57,6 +57,45 @@ class HomeOsGateway:
 
     async def get_stack_health(self) -> dict[str, Any]:
         return await self._get("/system/stack-health")
+
+    async def get_auto_light_settings(self) -> AutoLightSettings:
+        data = await self._get("/system/auto-light")
+        return self._to_auto_light_settings(data)
+
+    async def update_auto_light_enabled(self, *, enabled: bool) -> AutoLightSettings:
+        current = await self.get_auto_light_settings()
+        data = await self._request(
+            "PUT",
+            "/system/auto-light",
+            json={
+                "enabled": enabled,
+                "sensor_entity_id": current.sensor_entity_id,
+                "target_entity_id": current.target_entity_id,
+                "mode": current.mode,
+                "on_lux": current.on_lux,
+                "off_lux": current.off_lux,
+                "on_raw": current.on_raw,
+                "off_raw": current.off_raw,
+            },
+        )
+        return self._to_auto_light_settings(data)
+
+    async def list_audit_events(self, *, limit: int = 5) -> list[AuditEvent]:
+        data = await self._get(f"/audit-events?limit={limit}")
+        return [
+            AuditEvent(
+                id=item["id"],
+                actor_type=item["actor_type"],
+                actor_id=item.get("actor_id"),
+                action=item["action"],
+                target_type=item["target_type"],
+                target_id=item.get("target_id"),
+                severity=item["severity"],
+                metadata_json=item["metadata_json"],
+                created_at=item["created_at"],
+            )
+            for item in data["items"]
+        ]
 
     async def execute_entity_command(self, *, entity_id: str, command: str, params: dict) -> dict[str, Any]:
         return await self._request(
@@ -118,3 +157,17 @@ class HomeOsGateway:
             response.raise_for_status()
             self._token = response.json()["access_token"]
             return self._token
+
+    def _to_auto_light_settings(self, data: dict[str, Any]) -> AutoLightSettings:
+        return AutoLightSettings(
+            enabled=data["enabled"],
+            sensor_entity_id=data.get("sensor_entity_id"),
+            target_entity_id=data.get("target_entity_id"),
+            mode=data["mode"],
+            on_lux=data["on_lux"],
+            off_lux=data["off_lux"],
+            on_raw=data["on_raw"],
+            off_raw=data["off_raw"],
+            source=data["source"],
+            updated_at=data.get("updated_at"),
+        )

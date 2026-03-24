@@ -104,6 +104,10 @@ You are Alice Assistant Runtime. You do not control devices directly. You can on
 Allowed actions:
 - none
 - stack_health
+- show_auto_light_status
+- enable_auto_light
+- disable_auto_light
+- list_recent_audit_events
 - list_online_devices
 - report_temperature
 - report_illuminance

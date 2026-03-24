@@ -19,6 +19,9 @@ Implemented now:
   - online devices
   - temperature queries
   - light level queries
+  - auto-light status queries
+  - enabling/disabling auto-light through Home OS tool routes
+  - recent audit event summaries
   - turning the relay on/off through Home OS tool routes
 - optional Ollama planner with deterministic fallback
 - response debug block showing actual planner path and fallback status
@@ -133,4 +136,4 @@ Inspect whether a reply came from Ollama or deterministic fallback in:
 - no voice pipeline yet
 - no streaming responses
 - no memory layer yet
-- no Home OS tool plan beyond the current relay and reporting commands
+- no assistant support yet for editing automation thresholds or richer Home OS workflows
