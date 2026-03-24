@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 
 from assistant_runtime.core.config import Settings
-from assistant_runtime.models import AuditEvent, AutoLightSettings, Device, Entity, EntityState, SessionMessage
+from assistant_runtime.models import AuditEvent, AutoLightSettings, Device, DeviceDetail, DeviceDetailEntity, Entity, EntityState, SessionMessage
 from assistant_runtime.schemas import ChatResponse
 from assistant_runtime.services.assistant_service import AssistantService
 from assistant_runtime.services.ollama_planner import PlannerDecision
@@ -50,6 +50,65 @@ class FakeGateway:
                 created_at="2026-03-23T18:01:02",
             ),
         ]
+        self.device_details = {
+            "dev_light_bench_01": DeviceDetail(
+                device=Device(
+                    id="dev_light_bench_01",
+                    name="Bench Light",
+                    device_type="relay_node",
+                    status="online",
+                    fw_version="0.1.1",
+                ),
+                entities=[
+                    DeviceDetailEntity(
+                        id="ent_dev_light_bench_01_relay",
+                        capability_id="relay",
+                        kind="switch.relay",
+                        name="Bench Light",
+                        writable=1,
+                        state={"on": True},
+                        state_source="mqtt.state",
+                        state_updated_at="2026-03-23T18:01:02",
+                        state_version=3,
+                    )
+                ],
+                audit_events=self.audit_events,
+            ),
+            "dev_sensor_hall_01": DeviceDetail(
+                device=Device(
+                    id="dev_sensor_hall_01",
+                    name="Hall Sensor",
+                    device_type="sensor_node",
+                    status="online",
+                    fw_version="0.1.1",
+                ),
+                entities=[
+                    DeviceDetailEntity(
+                        id="ent_dev_sensor_hall_01_illuminance",
+                        capability_id="illuminance",
+                        kind="sensor.illuminance",
+                        name="Hall Sensor Illuminance",
+                        writable=0,
+                        state={"lux": 42.0, "raw": 2900},
+                        state_source="mqtt.state",
+                        state_updated_at="2026-03-23T18:00:00",
+                        state_version=2,
+                    ),
+                    DeviceDetailEntity(
+                        id="ent_dev_sensor_hall_01_temperature",
+                        capability_id="temperature",
+                        kind="sensor.temperature",
+                        name="Hall Sensor Temperature",
+                        writable=0,
+                        state={"celsius": 23.4},
+                        state_source="mqtt.state",
+                        state_updated_at="2026-03-23T18:00:00",
+                        state_version=1,
+                    ),
+                ],
+                audit_events=[],
+            ),
+        }
 
     async def list_devices(self):
         return [
@@ -109,6 +168,9 @@ class FakeGateway:
             "broker": {"connected": True, "host": "127.0.0.1", "port": 1883},
             "devices": {"online": 2, "offline": 0},
         }
+
+    async def get_device_detail(self, *, device_id: str):
+        return self.device_details[device_id]
 
     async def get_auto_light_settings(self):
         return self.auto_light_settings
@@ -188,6 +250,24 @@ class FakeMappingPlanner:
         )
 
 
+class FakeDeviceDetailPlanner:
+    async def plan(
+        self,
+        *,
+        message: str,
+        recent_messages: list[SessionMessage],
+        devices: list[Device],
+        entities: list[Entity],
+        states: list[EntityState],
+    ) -> PlannerDecision:
+        assert recent_messages
+        return PlannerDecision(
+            action="show_device_detail",
+            reply="Planner loaded the bench light details.",
+            target_hint="Bench Light",
+        )
+
+
 def build_service(tmp_path, *, assistant_mode: str = "deterministic", planner=None) -> AssistantService:
     settings = Settings(
         assistant_mode=assistant_mode,
@@ -213,6 +293,15 @@ def test_reports_online_devices(tmp_path):
     assert response.success is True
     assert "Bench Light" in response.reply
     assert response.session_id.startswith("sess_")
+
+
+def test_reports_device_detail(tmp_path):
+    service = build_service(tmp_path)
+    response = asyncio.run(_chat(service, "show me the bench light details"))
+    assert response.success is True
+    assert "Bench Light is online" in response.reply
+    assert "Bench Light: on=True" in response.reply
+    assert "entity.command.requested" in response.reply
 
 
 def test_reports_temperature(tmp_path):
@@ -334,3 +423,11 @@ def test_ollama_planner_can_update_auto_light_mapping(tmp_path):
         "sensor_entity_id": "ent_dev_sensor_hall_01_illuminance",
         "target_entity_id": "ent_dev_light_bench_01_relay",
     }
+
+
+def test_ollama_planner_can_show_device_detail(tmp_path):
+    service = build_service(tmp_path, assistant_mode="auto", planner=FakeDeviceDetailPlanner())
+    response = asyncio.run(_chat(service, "what's going on with the bench light"))
+    assert response.mode == "ollama"
+    assert response.success is True
+    assert response.reply == "Planner loaded the bench light details."

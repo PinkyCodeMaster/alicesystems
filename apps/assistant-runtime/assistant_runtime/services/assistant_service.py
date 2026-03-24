@@ -6,7 +6,7 @@ from typing import Any, Protocol
 
 from assistant_runtime.clients.home_os_gateway import HomeOsGateway
 from assistant_runtime.core.config import Settings
-from assistant_runtime.models import Device, Entity, EntityState, SessionMessage
+from assistant_runtime.models import Device, DeviceDetailEntity, Entity, EntityState, SessionMessage
 from assistant_runtime.schemas import ChatDebug, ChatResponse, DependencyStatus, ToolTrace
 from assistant_runtime.services.ollama_planner import OllamaPlanner, PlannerDecision
 from assistant_runtime.services.session_store import SessionStore
@@ -208,6 +208,52 @@ class AssistantService:
                 ),
             )
 
+        context = context or await self._load_context(traces)
+
+        if action == "show_device_detail":
+            target = self._find_device(
+                context=context,
+                lowered_message=lowered_message,
+                target_hint=planner_target_hint,
+            )
+            if target is None:
+                return ChatResponse(
+                    session_id="",
+                    mode=mode,
+                    success=False,
+                    reply="I could not determine which device you want details for. Try naming the device explicitly.",
+                    tool_traces=traces,
+                    debug=self._build_debug(
+                        response_mode=mode,
+                        planner_source=("ollama" if mode == "ollama" else "deterministic"),
+                        fallback_used=False,
+                        planner_error=None,
+                    ),
+                )
+            detail = await self.gateway.get_device_detail(device_id=target.id)
+            traces.append(ToolTrace(tool="devices.detail", status="ok", detail=f"Loaded detail for {detail.device.name}"))
+            entity_parts = [self._format_device_entity_summary(entity) for entity in detail.entities[:5]]
+            audit_parts = [f"{event.action} at {event.created_at}" for event in detail.audit_events[:3]]
+            reply = planner_reply or (
+                f"{detail.device.name} is {detail.device.status} "
+                f"({detail.device.device_type}, fw {detail.device.fw_version or 'unknown'}). "
+                f"Entities: {'; '.join(entity_parts) if entity_parts else 'none'}. "
+                f"Recent activity: {'; '.join(audit_parts) if audit_parts else 'none'}."
+            )
+            return ChatResponse(
+                session_id="",
+                mode=mode,
+                success=True,
+                reply=reply,
+                tool_traces=traces,
+                debug=self._build_debug(
+                    response_mode=mode,
+                    planner_source=("ollama" if mode == "ollama" else "deterministic"),
+                    fallback_used=False,
+                    planner_error=None,
+                ),
+            )
+
         if action == "show_auto_light_status":
             settings = await self.gateway.get_auto_light_settings()
             traces.append(ToolTrace(tool="system.auto_light.get", status="ok", detail="Fetched auto-light settings"))
@@ -304,8 +350,6 @@ class AssistantService:
                     planner_error=None,
                 ),
             )
-
-        context = context or await self._load_context(traces)
 
         if action == "update_auto_light_mapping":
             changes = planner_params or self._extract_auto_light_mapping_changes(lowered_message, context)
@@ -516,7 +560,7 @@ class AssistantService:
             mode="deterministic" if mode != "ollama" else mode,
             success=False,
             reply=(
-                "I can currently show stack health, list online devices, report temperature or light readings, "
+                "I can currently show stack health, list online devices, show device details, report temperature or light readings, "
                 "turn the light relay on or off, show or toggle auto-light, edit auto-light thresholds or mappings, "
                 "and list recent audit events."
             ),
@@ -561,6 +605,11 @@ class AssistantService:
         normalized = lowered.replace("-", " ")
         if any(phrase in lowered for phrase in ("stack health", "system health", "hub health")):
             return "stack_health"
+        if any(
+            phrase in normalized
+            for phrase in ("device details", "device detail", "details", "detail", "what's going on with", "what is going on with", "details for", "tell me about")
+        ):
+            return "show_device_detail"
         if "auto light" in normalized or "automatic light" in normalized:
             if self._looks_like_auto_light_mapping_update(normalized):
                 return "update_auto_light_mapping"
@@ -740,6 +789,31 @@ class AssistantService:
             if entity.id == entity_id:
                 return entity.name
         return entity_id
+
+    def _find_device(
+        self,
+        *,
+        context: AssistantContext,
+        lowered_message: str,
+        target_hint: str | None,
+    ) -> Device | None:
+        candidates = [lowered_message]
+        if target_hint:
+            candidates.append(target_hint.lower())
+
+        for device in context.devices:
+            for candidate in candidates:
+                if device.name.lower() in candidate:
+                    return device
+                if device.id.lower() in candidate:
+                    return device
+        return None
+
+    def _format_device_entity_summary(self, entity: DeviceDetailEntity) -> str:
+        if entity.state is None:
+            return f"{entity.name}: no state"
+        state_pairs = ", ".join(f"{key}={value}" for key, value in entity.state.items())
+        return f"{entity.name}: {state_pairs}"
 
     def _states_for_kind(self, context: AssistantContext, kind: str) -> list[tuple[Entity, EntityState]]:
         state_map = {state.entity_id: state for state in context.states}

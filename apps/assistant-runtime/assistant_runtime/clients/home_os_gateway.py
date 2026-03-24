@@ -6,7 +6,7 @@ from typing import Any
 import httpx
 
 from assistant_runtime.core.config import Settings, load_fallback_home_os_credentials
-from assistant_runtime.models import AuditEvent, AutoLightSettings, Device, Entity, EntityState
+from assistant_runtime.models import AuditEvent, AutoLightSettings, Device, DeviceDetail, DeviceDetailEntity, Entity, EntityState
 
 
 class HomeOsGateway:
@@ -41,6 +41,46 @@ class HomeOsGateway:
             )
             for item in data["items"]
         ]
+
+    async def get_device_detail(self, *, device_id: str) -> DeviceDetail:
+        data = await self._get(f"/devices/{device_id}")
+        return DeviceDetail(
+            device=Device(
+                id=data["device"]["id"],
+                name=data["device"]["name"],
+                device_type=data["device"]["device_type"],
+                status=data["device"]["status"],
+                fw_version=data["device"].get("fw_version"),
+            ),
+            entities=[
+                DeviceDetailEntity(
+                    id=item["id"],
+                    capability_id=item["capability_id"],
+                    kind=item["kind"],
+                    name=item["name"],
+                    writable=item["writable"],
+                    state=item.get("state"),
+                    state_source=item.get("state_source"),
+                    state_updated_at=item.get("state_updated_at"),
+                    state_version=item.get("state_version"),
+                )
+                for item in data["entities"]
+            ],
+            audit_events=[
+                AuditEvent(
+                    id=item["id"],
+                    actor_type=item["actor_type"],
+                    actor_id=item.get("actor_id"),
+                    action=item["action"],
+                    target_type=item["target_type"],
+                    target_id=item.get("target_id"),
+                    severity=item["severity"],
+                    metadata_json=item["metadata_json"],
+                    created_at=item["created_at"],
+                )
+                for item in data["audit_events"]
+            ],
+        )
 
     async def list_entity_states(self) -> list[EntityState]:
         data = await self._get("/entities/states")

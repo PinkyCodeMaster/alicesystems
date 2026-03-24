@@ -60,6 +60,26 @@ class AuditEvent:
 
 
 @dataclass
+class DeviceDetailEntity:
+    id: str
+    capability_id: str
+    kind: str
+    name: str
+    writable: int
+    state: dict | None
+    state_source: str | None
+    state_updated_at: str | None
+    state_version: int | None
+
+
+@dataclass
+class DeviceDetail:
+    device: Device
+    entities: list[DeviceDetailEntity]
+    audit_events: list[AuditEvent]
+
+
+@dataclass
 class SessionMessage:
     id: int
     session_id: str

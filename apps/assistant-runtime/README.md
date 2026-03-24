@@ -15,6 +15,7 @@ Implemented now:
 - `GET /api/v1/sessions/{session_id}/messages`
 - SQLite-backed session/thread history
 - deterministic intent handling for:
+  - device detail queries
   - stack health
   - online devices
   - temperature queries
