@@ -51,6 +51,7 @@ Implemented now:
   - overview cards and quick links
 - `/assistant`
   - browser assistant console
+  - streaming assistant replies
   - session thread
   - assistant health
   - runtime memory snapshot

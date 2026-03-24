@@ -20,6 +20,7 @@ import {
   AssistantHealthResponse,
   AssistantSessionMessage,
   assistantFetch,
+  assistantStreamChat,
   formatDate,
 } from "@/lib/alice-client";
 
@@ -49,6 +50,11 @@ export function AssistantConsole({
     useState<AssistantChatResponse | null>(null);
   const [assistantSubmitting, setAssistantSubmitting] = useState(false);
   const [assistantRefreshing, setAssistantRefreshing] = useState(false);
+  const [streamingReply, setStreamingReply] = useState("");
+  const [streamingUserMessage, setStreamingUserMessage] = useState<string | null>(null);
+  const [streamingToolTraces, setStreamingToolTraces] = useState<
+    AssistantChatResponse["tool_traces"]
+  >([]);
 
   const loadAssistantMessages = async () => {
     if (!assistantSessionId) {
@@ -129,22 +135,41 @@ export function AssistantConsole({
 
     setAssistantSubmitting(true);
     try {
-      const response = await assistantFetch<AssistantChatResponse>(
-        assistantBaseUrl,
-        "/chat",
-        {
-          method: "POST",
-          body: JSON.stringify({
-            message,
-            session_id: assistantSessionId,
-          }),
-        },
-      );
-      setAssistantSessionId(response.session_id);
-      setAssistantResponse(response);
+      setStreamingReply("");
+      setStreamingUserMessage(message);
+      setStreamingToolTraces([]);
       setAssistantInput("");
       setAssistantError(null);
+
+      await assistantStreamChat(
+        assistantBaseUrl,
+        {
+          message,
+          session_id: assistantSessionId,
+        },
+        {
+          onStart: ({ session_id }) => {
+            setAssistantSessionId(session_id);
+          },
+          onTool: (trace) => {
+            setStreamingToolTraces((current) => [...current, trace]);
+          },
+          onDelta: ({ content }) => {
+            setStreamingReply((current) => current + content);
+          },
+          onDone: (response) => {
+            setAssistantResponse(response);
+          },
+          onError: ({ detail }) => {
+            throw new Error(detail);
+          },
+        },
+      );
+
       await loadAssistantMessages();
+      setStreamingReply("");
+      setStreamingUserMessage(null);
+      setStreamingToolTraces([]);
       if (onMutation) {
         await onMutation();
       }
@@ -152,6 +177,9 @@ export function AssistantConsole({
       setAssistantError(
         error instanceof Error ? error.message : "Assistant request failed",
       );
+      setStreamingReply("");
+      setStreamingUserMessage(null);
+      setStreamingToolTraces([]);
     } finally {
       setAssistantSubmitting(false);
     }
@@ -215,7 +243,7 @@ export function AssistantConsole({
                 size="sm"
                 type="button"
                 onClick={() => void loadAssistantMessages()}
-                disabled={!assistantSessionId || assistantRefreshing}
+                disabled={!assistantSessionId || assistantRefreshing || assistantSubmitting}
               >
                 <RefreshCcw className="mr-2 h-4 w-4" />
                 {assistantRefreshing ? "Refreshing..." : "Refresh"}
@@ -229,7 +257,11 @@ export function AssistantConsole({
                   setAssistantMessages([]);
                   setAssistantResponse(null);
                   setAssistantError(null);
+                  setStreamingReply("");
+                  setStreamingUserMessage(null);
+                  setStreamingToolTraces([]);
                 }}
+                disabled={assistantSubmitting}
               >
                 New session
               </Button>
@@ -265,7 +297,7 @@ export function AssistantConsole({
                   Assistant target: {assistantBaseUrl}
                 </div>
                 <Button disabled={assistantSubmitting} type="submit">
-                  {assistantSubmitting ? "Sending..." : "Send to assistant"}
+                  {assistantSubmitting ? "Streaming..." : "Send to assistant"}
                 </Button>
               </div>
             </form>
@@ -284,50 +316,82 @@ export function AssistantConsole({
               </div>
 
               <div className="max-h-105 space-y-3 overflow-y-auto pr-1">
-                {assistantMessages.length === 0 ? (
+                {assistantMessages.length === 0 && !streamingUserMessage ? (
                   <div className="rounded-2xl border border-dashed p-4 text-sm text-muted-foreground">
                     Start a session from the browser to watch the assistant
                     memory change in real time.
                   </div>
                 ) : (
-                  assistantMessages.map((message) => (
-                    <div
-                      key={`${message.session_id}-${message.id}`}
-                      className={
-                        message.role === "assistant"
-                          ? "rounded-2xl border bg-muted/30 p-4"
-                          : "rounded-2xl border p-4"
-                      }
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="flex items-center gap-2">
-                          <Badge
-                            variant={
-                              message.role === "assistant" ? "default" : "outline"
-                            }
-                          >
-                            {message.role}
-                          </Badge>
-                          {message.mode ? (
-                            <Badge variant="secondary">{message.mode}</Badge>
-                          ) : null}
-                          {typeof message.success === "boolean" ? (
+                  <>
+                    {assistantMessages.map((message) => (
+                      <div
+                        key={`${message.session_id}-${message.id}`}
+                        className={
+                          message.role === "assistant"
+                            ? "rounded-2xl border bg-muted/30 p-4"
+                            : "rounded-2xl border p-4"
+                        }
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-2">
                             <Badge
-                              variant={message.success ? "default" : "destructive"}
+                              variant={
+                                message.role === "assistant" ? "default" : "outline"
+                              }
                             >
-                              {message.success ? "ok" : "failed"}
+                              {message.role}
                             </Badge>
-                          ) : null}
+                            {message.mode ? (
+                              <Badge variant="secondary">{message.mode}</Badge>
+                            ) : null}
+                            {typeof message.success === "boolean" ? (
+                              <Badge
+                                variant={message.success ? "default" : "destructive"}
+                              >
+                                {message.success ? "ok" : "failed"}
+                              </Badge>
+                            ) : null}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {formatDate(message.created_at)}
+                          </div>
                         </div>
-                        <div className="text-xs text-muted-foreground">
-                          {formatDate(message.created_at)}
-                        </div>
+                        <p className="mt-3 whitespace-pre-wrap text-sm">
+                          {message.content}
+                        </p>
                       </div>
-                      <p className="mt-3 whitespace-pre-wrap text-sm">
-                        {message.content}
-                      </p>
-                    </div>
-                  ))
+                    ))}
+
+                    {streamingUserMessage ? (
+                      <div className="rounded-2xl border p-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline">user</Badge>
+                            <Badge variant="secondary">draft</Badge>
+                          </div>
+                          <div className="text-xs text-muted-foreground">now</div>
+                        </div>
+                        <p className="mt-3 whitespace-pre-wrap text-sm">
+                          {streamingUserMessage}
+                        </p>
+                      </div>
+                    ) : null}
+
+                    {assistantSubmitting ? (
+                      <div className="rounded-2xl border bg-muted/30 p-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-2">
+                            <Badge>assistant</Badge>
+                            <Badge variant="secondary">streaming</Badge>
+                          </div>
+                          <div className="text-xs text-muted-foreground">now</div>
+                        </div>
+                        <p className="mt-3 whitespace-pre-wrap text-sm">
+                          {streamingReply || "Thinking..."}
+                        </p>
+                      </div>
+                    ) : null}
+                  </>
                 )}
               </div>
             </div>
@@ -359,8 +423,27 @@ export function AssistantConsole({
 
             <div className="rounded-2xl border p-4">
               <div className="text-sm font-medium">Latest assistant debug</div>
-              {assistantResponse || lastAssistantMessage ? (
+              {assistantSubmitting || assistantResponse || lastAssistantMessage ? (
                 <div className="mt-3 space-y-3 text-xs text-muted-foreground">
+                  {assistantSubmitting ? (
+                    <>
+                      <div>stream: active</div>
+                      <div>preview chars: {streamingReply.length}</div>
+                      <div className="space-y-2">
+                        {streamingToolTraces.map((trace, index) => (
+                          <div
+                            key={`${trace.tool}-${index}`}
+                            className="rounded-xl border px-3 py-2"
+                          >
+                            <div className="font-medium text-foreground">
+                              {trace.tool} [{trace.status}]
+                            </div>
+                            <div className="mt-1">{trace.detail}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  ) : null}
                   {assistantResponse ? (
                     <>
                       <div>response mode: {assistantResponse.mode}</div>

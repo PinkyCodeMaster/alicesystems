@@ -332,6 +332,18 @@ class FakeConversationPlanner:
         assert recent_messages[-1].content == "hello alice"
         return "Hey, I'm here. What do you want to work on in the house today?"
 
+    async def stream_chat(
+        self,
+        *,
+        recent_messages: list[SessionMessage],
+        devices: list[Device],
+        entities: list[Entity],
+        states: list[EntityState],
+    ):
+        assert recent_messages[-1].content == "hello alice"
+        for chunk in ("Hey, ", "I'm here. ", "What do you want to work on in the house today?"):
+            yield chunk
+
 
 class FailingConversationPlanner:
     def __init__(self) -> None:
@@ -359,6 +371,18 @@ class FailingConversationPlanner:
         self.chat_called = True
         return "Hi. I can chat normally, and I can still help with your devices when you need that."
 
+    async def stream_chat(
+        self,
+        *,
+        recent_messages: list[SessionMessage],
+        devices: list[Device],
+        entities: list[Entity],
+        states: list[EntityState],
+    ):
+        self.chat_called = True
+        yield "Hi. "
+        yield "I can chat normally, and I can still help with your devices when you need that."
+
 
 def build_service(tmp_path, *, assistant_mode: str = "deterministic", planner=None) -> AssistantService:
     settings = Settings(
@@ -377,6 +401,14 @@ def build_service(tmp_path, *, assistant_mode: str = "deterministic", planner=No
 
 async def _chat(service: AssistantService, message: str, session_id: str | None = None) -> ChatResponse:
     return await service.chat(message=message, session_id=session_id)
+
+
+async def _collect_stream(
+    service: AssistantService,
+    message: str,
+    session_id: str | None = None,
+):
+    return [event async for event in service.chat_stream(message=message, session_id=session_id)]
 
 
 def test_reports_online_devices(tmp_path):
@@ -556,3 +588,28 @@ def test_tool_commands_still_fall_back_to_deterministic_execution_when_planner_f
         "switch.set",
         {"on": True},
     )
+
+
+def test_streaming_conversation_emits_deltas_and_done(tmp_path):
+    service = build_service(tmp_path, assistant_mode="auto", planner=FakeConversationPlanner())
+    events = asyncio.run(_collect_stream(service, "hello alice"))
+    assert events[0]["event"] == "start"
+    assert events[1]["event"] == "delta"
+    assert events[-1]["event"] == "done"
+    done = events[-1]["data"]
+    assert done["mode"] == "ollama"
+    assert done["success"] is True
+    assert "What do you want to work on" in done["reply"]
+
+
+def test_streaming_tool_reply_emits_done_and_persists_session(tmp_path):
+    service = build_service(tmp_path)
+    events = asyncio.run(_collect_stream(service, "turn on the bench light"))
+    assert events[0]["event"] == "start"
+    assert events[-1]["event"] == "done"
+    done = events[-1]["data"]
+    assert done["mode"] == "deterministic"
+    assert done["success"] is True
+    messages = asyncio.run(service.list_messages(session_id=done["session_id"]))
+    assert messages[-1].role == "assistant"
+    assert "Queued turn-on command" in messages[-1].content

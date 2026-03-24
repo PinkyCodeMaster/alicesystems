@@ -176,6 +176,18 @@ export type AssistantSessionMessage = {
   metadata: Record<string, unknown>;
 };
 
+export type AssistantStreamStart = {
+  session_id: string;
+};
+
+export type AssistantStreamDelta = {
+  content: string;
+};
+
+export type AssistantStreamError = {
+  detail: string;
+};
+
 export const TOKEN_KEY = "alice.dashboard.token";
 const DEFAULT_API_PORT = 8000;
 const DEFAULT_ASSISTANT_PORT = 8010;
@@ -319,4 +331,113 @@ export async function assistantFetch<T>(
   }
 
   return (await response.json()) as T;
+}
+
+export async function assistantStreamChat(
+  assistantBaseUrl: string,
+  payload: { message: string; session_id?: string | null },
+  handlers: {
+    onStart?: (value: AssistantStreamStart) => void;
+    onTool?: (value: AssistantToolTrace) => void;
+    onDelta?: (value: AssistantStreamDelta) => void;
+    onDone?: (value: AssistantChatResponse) => void;
+    onError?: (value: AssistantStreamError) => void;
+  },
+) {
+  const response = await fetch(`${assistantBaseUrl}/chat/stream`, {
+    method: "POST",
+    headers: {
+      Accept: "text/event-stream",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(body || `${response.status} ${response.statusText}`);
+  }
+
+  if (!response.body) {
+    throw new Error("Assistant stream response did not include a body.");
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) {
+      break;
+    }
+
+    buffer += decoder.decode(value, { stream: true });
+    let separatorIndex = buffer.indexOf("\n\n");
+    while (separatorIndex !== -1) {
+      const rawEvent = buffer.slice(0, separatorIndex);
+      buffer = buffer.slice(separatorIndex + 2);
+      _dispatchAssistantStreamEvent(rawEvent, handlers);
+      separatorIndex = buffer.indexOf("\n\n");
+    }
+  }
+
+  buffer += decoder.decode();
+  if (buffer.trim()) {
+    _dispatchAssistantStreamEvent(buffer, handlers);
+  }
+}
+
+function _dispatchAssistantStreamEvent(
+  rawEvent: string,
+  handlers: {
+    onStart?: (value: AssistantStreamStart) => void;
+    onTool?: (value: AssistantToolTrace) => void;
+    onDelta?: (value: AssistantStreamDelta) => void;
+    onDone?: (value: AssistantChatResponse) => void;
+    onError?: (value: AssistantStreamError) => void;
+  },
+) {
+  const lines = rawEvent.split(/\r?\n/);
+  let eventName = "message";
+  const dataLines: string[] = [];
+
+  for (const line of lines) {
+    if (line.startsWith("event:")) {
+      eventName = line.slice("event:".length).trim();
+    } else if (line.startsWith("data:")) {
+      dataLines.push(line.slice("data:".length).trim());
+    }
+  }
+
+  if (dataLines.length === 0) {
+    return;
+  }
+
+  const payload = JSON.parse(dataLines.join("\n")) as
+    | AssistantStreamStart
+    | AssistantToolTrace
+    | AssistantStreamDelta
+    | AssistantChatResponse
+    | AssistantStreamError;
+
+  switch (eventName) {
+    case "start":
+      handlers.onStart?.(payload as AssistantStreamStart);
+      break;
+    case "tool":
+      handlers.onTool?.(payload as AssistantToolTrace);
+      break;
+    case "delta":
+      handlers.onDelta?.(payload as AssistantStreamDelta);
+      break;
+    case "done":
+      handlers.onDone?.(payload as AssistantChatResponse);
+      break;
+    case "error":
+      handlers.onError?.(payload as AssistantStreamError);
+      break;
+    default:
+      break;
+  }
 }

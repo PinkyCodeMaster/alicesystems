@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 import json
 from dataclasses import dataclass
 from typing import Any
@@ -109,6 +110,52 @@ class OllamaPlanner:
         if not content:
             raise ValueError("Ollama chat response was empty.")
         return content
+
+    async def stream_chat(
+        self,
+        *,
+        recent_messages: list[SessionMessage],
+        devices: list[Device],
+        entities: list[Entity],
+        states: list[EntityState],
+    ) -> AsyncIterator[str]:
+        if not self.settings.ollama_model:
+            raise RuntimeError("OLLAMA_MODEL is not configured.")
+
+        messages = self._build_chat_messages(
+            recent_messages=recent_messages,
+            devices=devices,
+            entities=entities,
+            states=states,
+        )
+
+        saw_content = False
+        async with httpx.AsyncClient(timeout=self.settings.ollama_timeout_seconds) as client:
+            async with client.stream(
+                "POST",
+                f"{self.settings.ollama_base_url}/api/chat",
+                json={
+                    "model": self.settings.ollama_model,
+                    "messages": messages,
+                    "stream": True,
+                },
+            ) as response:
+                response.raise_for_status()
+                async for line in response.aiter_lines():
+                    if not line:
+                        continue
+                    payload = json.loads(line)
+                    message = payload.get("message")
+                    if not isinstance(message, dict):
+                        continue
+                    content = str(message.get("content", ""))
+                    if not content:
+                        continue
+                    saw_content = True
+                    yield content
+
+        if not saw_content:
+            raise ValueError("Ollama chat stream returned no content.")
 
     def _build_prompt(
         self,

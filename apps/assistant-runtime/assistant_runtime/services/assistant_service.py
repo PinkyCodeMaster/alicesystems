@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections.abc import AsyncIterator
+from dataclasses import dataclass, field
 import re
 from typing import Any, Protocol
 
@@ -17,6 +18,24 @@ class AssistantContext:
     devices: list[Device]
     entities: list[Entity]
     states: list[EntityState]
+
+
+@dataclass
+class TurnState:
+    session_id: str
+    lowered: str
+    deterministic_action: str
+    recent_messages: list[SessionMessage]
+    traces: list[ToolTrace] = field(default_factory=list)
+    mode: str = "deterministic"
+    context: AssistantContext | None = None
+    planner_reply: str | None = None
+    planner_action: str | None = None
+    planner_target_hint: str | None = None
+    planner_params: dict[str, Any] | None = None
+    planner_source: str = "deterministic"
+    fallback_used: bool = False
+    planner_error: str | None = None
 
 
 class Planner(Protocol):
@@ -38,6 +57,15 @@ class Planner(Protocol):
         entities: list[Entity],
         states: list[EntityState],
     ) -> str: ...
+
+    async def stream_chat(
+        self,
+        *,
+        recent_messages: list[SessionMessage],
+        devices: list[Device],
+        entities: list[Entity],
+        states: list[EntityState],
+    ) -> AsyncIterator[str]: ...
 
 
 class AssistantService:
@@ -83,108 +111,133 @@ class AssistantService:
         return dependencies
 
     async def chat(self, *, message: str, session_id: str | None = None) -> ChatResponse:
+        turn = await self._initialize_turn(message=message, session_id=session_id)
+        response = await self._resolve_turn_response(turn=turn)
+        return self._persist_response(turn=turn, response=response)
+
+    async def chat_stream(
+        self,
+        *,
+        message: str,
+        session_id: str | None = None,
+    ) -> AsyncIterator[dict[str, Any]]:
+        turn = await self._initialize_turn(message=message, session_id=session_id)
+        yield {"event": "start", "data": {"session_id": turn.session_id}}
+
+        if self._should_use_conversation(turn):
+            async for event in self._stream_conversation_response(turn=turn):
+                yield event
+            return
+
+        response = await self._resolve_turn_response(turn=turn)
+        final_response = self._persist_response(turn=turn, response=response)
+        for trace in final_response.tool_traces:
+            yield {"event": "tool", "data": trace.model_dump()}
+        for chunk in self._chunk_text(final_response.reply):
+            yield {"event": "delta", "data": {"content": chunk}}
+        yield {"event": "done", "data": final_response.model_dump()}
+
+    async def list_messages(self, *, session_id: str) -> list[SessionMessage]:
+        self.store.ensure_session(session_id)
+        return self.store.list_messages(session_id=session_id)
+
+    async def _initialize_turn(
+        self,
+        *,
+        message: str,
+        session_id: str | None,
+    ) -> TurnState:
         session_id = self.store.ensure_session(session_id)
         self.store.append_message(session_id=session_id, role="user", content=message)
 
         lowered = " ".join(message.lower().split())
-        deterministic_action = self._infer_deterministic_action(lowered)
-        traces: list[ToolTrace] = []
-        recent_messages = self.store.list_messages(
+        turn = TurnState(
             session_id=session_id,
-            limit=max(2, self.settings.session_history_window * 2),
+            lowered=lowered,
+            deterministic_action=self._infer_deterministic_action(lowered),
+            recent_messages=self.store.list_messages(
+                session_id=session_id,
+                limit=max(2, self.settings.session_history_window * 2),
+            ),
         )
 
-        mode = "deterministic"
-        context: AssistantContext | None = None
-        planner_reply: str | None = None
-        planner_action: str | None = None
-        planner_target_hint: str | None = None
-        planner_params: dict[str, Any] | None = None
-        planner_source = "deterministic"
-        fallback_used = False
-        planner_error: str | None = None
+        if self.settings.assistant_mode not in {"auto", "ollama"}:
+            return turn
 
-        if self.settings.assistant_mode in {"auto", "ollama"}:
-            try:
-                context = await self._load_context(traces)
-                decision = await self.planner.plan(
-                    message=message,
-                    recent_messages=recent_messages,
-                    devices=context.devices,
-                    entities=context.entities,
-                    states=context.states,
-                )
-                traces.append(ToolTrace(tool="planner.ollama", status="ok", detail=f"Planned action {decision.action}"))
-                mode = "ollama"
-                planner_source = "ollama"
-                planner_reply = decision.reply
-                planner_action = decision.action
-                planner_target_hint = decision.target_hint
-                planner_params = decision.params
-            except Exception as exc:
-                if self.settings.assistant_mode == "ollama" and not self.settings.assistant_allow_fallback:
-                    raise
-                fallback_used = True
-                planner_error = str(exc)
-                traces.append(ToolTrace(tool="planner.ollama", status="fallback", detail=str(exc)))
-
-        if planner_action and planner_action != "none":
-            response = await self._execute_action(
-                action=planner_action,
-                lowered_message=lowered,
-                traces=traces,
-                mode=mode,
-                context=context,
-                planner_reply=planner_reply,
-                planner_target_hint=planner_target_hint,
-                planner_params=planner_params,
+        try:
+            turn.context = await self._load_context(turn.traces)
+            decision = await self.planner.plan(
+                message=message,
+                recent_messages=turn.recent_messages,
+                devices=turn.context.devices,
+                entities=turn.context.entities,
+                states=turn.context.states,
             )
-        elif (
-            self.settings.assistant_mode in {"auto", "ollama"}
-            and deterministic_action == "none"
-            and (planner_source == "ollama" or planner_error is not None)
-        ):
-            try:
-                response = await self._respond_with_conversation(
-                    traces=traces,
-                    context=context,
-                    recent_messages=recent_messages,
-                    planner_error=planner_error,
-                )
-            except Exception as exc:
-                fallback_used = True
-                traces.append(ToolTrace(tool="chat.ollama", status="fallback", detail=str(exc)))
-                response = await self._execute_action(
-                    action=deterministic_action,
-                    lowered_message=lowered,
-                    traces=traces,
-                    mode="deterministic",
-                    context=context,
-                    planner_reply=None,
-                    planner_target_hint=None,
-                    planner_params=None,
-                )
-        else:
-            response = await self._execute_action(
-                action=deterministic_action,
-                lowered_message=lowered,
-                traces=traces,
-                mode="deterministic",
-                context=context,
-                planner_reply=None,
-                planner_target_hint=None,
-                planner_params=None,
+            turn.traces.append(
+                ToolTrace(tool="planner.ollama", status="ok", detail=f"Planned action {decision.action}")
+            )
+            turn.mode = "ollama"
+            turn.planner_source = "ollama"
+            turn.planner_reply = decision.reply
+            turn.planner_action = decision.action
+            turn.planner_target_hint = decision.target_hint
+            turn.planner_params = decision.params
+        except Exception as exc:
+            if self.settings.assistant_mode == "ollama" and not self.settings.assistant_allow_fallback:
+                raise
+            turn.fallback_used = True
+            turn.planner_error = str(exc)
+            turn.traces.append(ToolTrace(tool="planner.ollama", status="fallback", detail=str(exc)))
+
+        return turn
+
+    async def _resolve_turn_response(self, *, turn: TurnState) -> ChatResponse:
+        if turn.planner_action and turn.planner_action != "none":
+            return await self._execute_action(
+                action=turn.planner_action,
+                lowered_message=turn.lowered,
+                traces=turn.traces,
+                mode=turn.mode,
+                context=turn.context,
+                planner_reply=turn.planner_reply,
+                planner_target_hint=turn.planner_target_hint,
+                planner_params=turn.planner_params,
             )
 
+        if self._should_use_conversation(turn):
+            try:
+                turn.mode = "ollama"
+                turn.planner_source = "ollama"
+                return await self._respond_with_conversation(
+                    traces=turn.traces,
+                    context=turn.context,
+                    recent_messages=turn.recent_messages,
+                    planner_error=turn.planner_error,
+                )
+            except Exception as exc:
+                turn.fallback_used = True
+                turn.traces.append(ToolTrace(tool="chat.ollama", status="fallback", detail=str(exc)))
+
+        return await self._execute_action(
+            action=turn.deterministic_action,
+            lowered_message=turn.lowered,
+            traces=turn.traces,
+            mode="deterministic",
+            context=turn.context,
+            planner_reply=None,
+            planner_target_hint=None,
+            planner_params=None,
+        )
+
+    def _persist_response(self, *, turn: TurnState, response: ChatResponse) -> ChatResponse:
         response.debug = self._build_debug(
             response_mode=response.mode,
-            planner_source=planner_source,
-            fallback_used=fallback_used,
-            planner_error=planner_error,
+            planner_source=turn.planner_source,
+            fallback_used=turn.fallback_used,
+            planner_error=turn.planner_error,
         )
-
         self.store.append_message(
-            session_id=session_id,
+            session_id=turn.session_id,
             role="assistant",
             content=response.reply,
             mode=response.mode,
@@ -195,7 +248,7 @@ class AssistantService:
             },
         )
         return ChatResponse(
-            session_id=session_id,
+            session_id=turn.session_id,
             mode=response.mode,
             success=response.success,
             reply=response.reply,
@@ -203,9 +256,85 @@ class AssistantService:
             debug=response.debug,
         )
 
-    async def list_messages(self, *, session_id: str) -> list[SessionMessage]:
-        self.store.ensure_session(session_id)
-        return self.store.list_messages(session_id=session_id)
+    def _should_use_conversation(self, turn: TurnState) -> bool:
+        return (
+            self.settings.assistant_mode in {"auto", "ollama"}
+            and turn.deterministic_action == "none"
+            and (turn.planner_source == "ollama" or turn.planner_error is not None)
+        )
+
+    async def _stream_conversation_response(
+        self,
+        *,
+        turn: TurnState,
+    ) -> AsyncIterator[dict[str, Any]]:
+        context = turn.context or await self._load_context(turn.traces)
+        collected: list[str] = []
+
+        try:
+            async for chunk in self.planner.stream_chat(
+                recent_messages=turn.recent_messages,
+                devices=context.devices,
+                entities=context.entities,
+                states=context.states,
+            ):
+                if not chunk:
+                    continue
+                collected.append(chunk)
+                yield {"event": "delta", "data": {"content": chunk}}
+
+            turn.mode = "ollama"
+            turn.planner_source = "ollama"
+            turn.traces.append(
+                ToolTrace(tool="chat.ollama", status="ok", detail="Generated conversational reply")
+            )
+            response = ChatResponse(
+                session_id="",
+                mode="ollama",
+                success=True,
+                reply="".join(collected),
+                tool_traces=turn.traces,
+                debug=self._build_debug(
+                    response_mode="ollama",
+                    planner_source="ollama",
+                    fallback_used=turn.planner_error is not None,
+                    planner_error=turn.planner_error,
+                ),
+            )
+        except Exception as exc:
+            turn.fallback_used = True
+            turn.traces.append(ToolTrace(tool="chat.ollama", status="fallback", detail=str(exc)))
+            response = await self._execute_action(
+                action=turn.deterministic_action,
+                lowered_message=turn.lowered,
+                traces=turn.traces,
+                mode="deterministic",
+                context=context,
+                planner_reply=None,
+                planner_target_hint=None,
+                planner_params=None,
+            )
+
+        final_response = self._persist_response(turn=turn, response=response)
+        for trace in final_response.tool_traces:
+            yield {"event": "tool", "data": trace.model_dump()}
+        yield {"event": "done", "data": final_response.model_dump()}
+
+    def _chunk_text(self, text: str, chunk_size: int = 24) -> list[str]:
+        if not text:
+            return []
+        words = re.findall(r"\S+\s*", text)
+        chunks: list[str] = []
+        current = ""
+        for word in words:
+            if current and len(current) + len(word) > chunk_size:
+                chunks.append(current)
+                current = word
+            else:
+                current += word
+        if current:
+            chunks.append(current)
+        return chunks
 
     async def _respond_with_conversation(
         self,

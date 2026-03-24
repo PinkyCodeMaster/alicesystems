@@ -12,9 +12,11 @@ Implemented now:
 - FastAPI runtime
 - `GET /api/v1/health`
 - `POST /api/v1/chat`
+- `POST /api/v1/chat/stream`
 - `GET /api/v1/sessions/{session_id}/messages`
 - SQLite-backed session/thread history
 - natural Ollama chat fallback for non-tool prompts
+- streaming assistant replies for browser clients
 - deterministic intent handling for:
   - device detail queries
   - stack health
@@ -143,6 +145,5 @@ Inspect whether a reply came from Ollama or deterministic fallback in:
 ## Known Gaps
 
 - no voice pipeline yet
-- no streaming responses
-- no memory layer yet
+- no long-term memory layer yet
 - no assistant support yet for richer Home OS workflows beyond the current reporting, relay, and auto-light controls

@@ -36,6 +36,18 @@ class ChatResponse(BaseModel):
     debug: ChatDebug
 
 
+class ChatStreamStart(BaseModel):
+    session_id: str
+
+
+class ChatStreamDelta(BaseModel):
+    content: str
+
+
+class ChatStreamError(BaseModel):
+    detail: str
+
+
 class SessionMessageResponse(BaseModel):
     id: int
     session_id: str
