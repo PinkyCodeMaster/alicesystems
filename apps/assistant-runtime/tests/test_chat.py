@@ -68,6 +68,14 @@ class FakeGateway:
                 writable=1,
             ),
             Entity(
+                id="ent_dev_sensor_hall_01_illuminance",
+                device_id="dev_sensor_hall_01",
+                capability_id="illuminance",
+                kind="sensor.illuminance",
+                name="Hall Sensor Illuminance",
+                writable=0,
+            ),
+            Entity(
                 id="ent_dev_sensor_hall_01_temperature",
                 device_id="dev_sensor_hall_01",
                 capability_id="temperature",
@@ -79,6 +87,13 @@ class FakeGateway:
 
     async def list_entity_states(self):
         return [
+            EntityState(
+                entity_id="ent_dev_sensor_hall_01_illuminance",
+                value={"lux": 42.0, "raw": 2900},
+                source="mqtt.state",
+                updated_at="2026-03-23T18:00:00",
+                version=1,
+            ),
             EntityState(
                 entity_id="ent_dev_sensor_hall_01_temperature",
                 value={"celsius": 23.4},
@@ -149,6 +164,27 @@ class FakeThresholdPlanner:
             action="update_auto_light_thresholds",
             reply="Planner updated the auto-light thresholds.",
             params={"on_raw": 3300.0, "off_raw": 2800.0},
+        )
+
+
+class FakeMappingPlanner:
+    async def plan(
+        self,
+        *,
+        message: str,
+        recent_messages: list[SessionMessage],
+        devices: list[Device],
+        entities: list[Entity],
+        states: list[EntityState],
+    ) -> PlannerDecision:
+        assert recent_messages
+        return PlannerDecision(
+            action="update_auto_light_mapping",
+            reply="Planner updated the auto-light mapping.",
+            params={
+                "sensor_entity_id": "ent_dev_sensor_hall_01_illuminance",
+                "target_entity_id": "ent_dev_light_bench_01_relay",
+            },
         )
 
 
@@ -239,6 +275,21 @@ def test_can_update_multiple_auto_light_thresholds(tmp_path):
     assert service.gateway.auto_light_settings.off_lux == 40.0
 
 
+def test_can_update_auto_light_sensor_mapping(tmp_path):
+    service = build_service(tmp_path)
+    response = asyncio.run(_chat(service, "set auto-light sensor to hall sensor illuminance"))
+    assert response.success is True
+    assert response.reply.startswith("Updated auto-light mapping.")
+    assert service.gateway.last_auto_light_update == {"sensor_entity_id": "ent_dev_sensor_hall_01_illuminance"}
+
+
+def test_can_update_auto_light_target_mapping(tmp_path):
+    service = build_service(tmp_path)
+    response = asyncio.run(_chat(service, "set auto light target to bench light"))
+    assert response.success is True
+    assert service.gateway.last_auto_light_update == {"target_entity_id": "ent_dev_light_bench_01_relay"}
+
+
 def test_persists_session_history(tmp_path):
     service = build_service(tmp_path)
     first = asyncio.run(_chat(service, "what devices are online"))
@@ -271,3 +322,15 @@ def test_ollama_planner_can_update_auto_light_thresholds(tmp_path):
     assert response.success is True
     assert response.reply == "Planner updated the auto-light thresholds."
     assert service.gateway.last_auto_light_update == {"on_raw": 3300.0, "off_raw": 2800.0}
+
+
+def test_ollama_planner_can_update_auto_light_mapping(tmp_path):
+    service = build_service(tmp_path, assistant_mode="auto", planner=FakeMappingPlanner())
+    response = asyncio.run(_chat(service, "use the hall sensor for auto light"))
+    assert response.mode == "ollama"
+    assert response.success is True
+    assert response.reply == "Planner updated the auto-light mapping."
+    assert service.gateway.last_auto_light_update == {
+        "sensor_entity_id": "ent_dev_sensor_hall_01_illuminance",
+        "target_entity_id": "ent_dev_light_bench_01_relay",
+    }

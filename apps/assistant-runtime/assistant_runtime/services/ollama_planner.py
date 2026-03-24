@@ -111,6 +111,7 @@ Allowed actions:
 - enable_auto_light
 - disable_auto_light
 - update_auto_light_thresholds
+- update_auto_light_mapping
 - list_recent_audit_events
 - list_online_devices
 - report_temperature
@@ -124,7 +125,7 @@ Rules:
 - If the user refers to an earlier device indirectly, use target_hint to name it.
 - If unsure, use action "none".
 - Only use params for numeric settings changes.
-- Allowed params keys for threshold edits: on_raw, off_raw, on_lux, off_lux.
+- Allowed params keys for settings edits: on_raw, off_raw, on_lux, off_lux, sensor_entity_id, target_entity_id.
 - Keep reply concise and factual.
 
 Conversation history:
@@ -148,7 +149,9 @@ Return exactly one JSON object with this shape:
     "on_raw": 3000,
     "off_raw": 2600,
     "on_lux": 50,
-    "off_lux": 35
+    "off_lux": 35,
+    "sensor_entity_id": "ent_dev_sensor_hall_01_illuminance",
+    "target_entity_id": "ent_dev_light_bench_01_relay"
   }}
 }}
 """.strip()

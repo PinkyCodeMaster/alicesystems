@@ -305,6 +305,51 @@ class AssistantService:
                 ),
             )
 
+        context = context or await self._load_context(traces)
+
+        if action == "update_auto_light_mapping":
+            changes = planner_params or self._extract_auto_light_mapping_changes(lowered_message, context)
+            if not changes:
+                return ChatResponse(
+                    session_id="",
+                    mode=mode,
+                    success=False,
+                    reply="I could not determine which auto-light sensor or target to change. Try naming the sensor or light explicitly.",
+                    tool_traces=traces,
+                    debug=self._build_debug(
+                        response_mode=mode,
+                        planner_source=("ollama" if mode == "ollama" else "deterministic"),
+                        fallback_used=False,
+                        planner_error=None,
+                    ),
+                )
+            settings = await self.gateway.update_auto_light_settings(**changes)
+            traces.append(
+                ToolTrace(
+                    tool="system.auto_light.put",
+                    status="ok",
+                    detail="Updated auto-light mapping",
+                )
+            )
+            reply = planner_reply or (
+                "Updated auto-light mapping. "
+                f"Sensor: {self._describe_entity(context, settings.sensor_entity_id) or 'not set'}. "
+                f"Target: {self._describe_entity(context, settings.target_entity_id) or 'not set'}."
+            )
+            return ChatResponse(
+                session_id="",
+                mode=mode,
+                success=True,
+                reply=reply,
+                tool_traces=traces,
+                debug=self._build_debug(
+                    response_mode=mode,
+                    planner_source=("ollama" if mode == "ollama" else "deterministic"),
+                    fallback_used=False,
+                    planner_error=None,
+                ),
+            )
+
         if action == "list_recent_audit_events":
             events = await self.gateway.list_audit_events(limit=5)
             traces.append(ToolTrace(tool="audit.list", status="ok", detail=f"Loaded {len(events)} audit events"))
@@ -329,8 +374,6 @@ class AssistantService:
                     planner_error=None,
                 ),
             )
-
-        context = context or await self._load_context(traces)
 
         if action == "list_online_devices":
             online = [device.name for device in context.devices if device.status == "online"]
@@ -474,7 +517,7 @@ class AssistantService:
             success=False,
             reply=(
                 "I can currently show stack health, list online devices, report temperature or light readings, "
-                "turn the light relay on or off, show or toggle auto-light, edit auto-light thresholds, "
+                "turn the light relay on or off, show or toggle auto-light, edit auto-light thresholds or mappings, "
                 "and list recent audit events."
             ),
             tool_traces=traces,
@@ -519,6 +562,8 @@ class AssistantService:
         if any(phrase in lowered for phrase in ("stack health", "system health", "hub health")):
             return "stack_health"
         if "auto light" in normalized or "automatic light" in normalized:
+            if self._looks_like_auto_light_mapping_update(normalized):
+                return "update_auto_light_mapping"
             if self._extract_auto_light_threshold_changes(normalized):
                 return "update_auto_light_thresholds"
             if any(
@@ -595,6 +640,106 @@ class AssistantService:
             except ValueError:
                 continue
         return None
+
+    def _looks_like_auto_light_mapping_update(self, lowered: str) -> bool:
+        hints = self._extract_auto_light_mapping_hints(lowered)
+        return bool(hints)
+
+    def _extract_auto_light_mapping_changes(self, lowered: str, context: AssistantContext) -> dict[str, str]:
+        hints = self._extract_auto_light_mapping_hints(lowered)
+        changes: dict[str, str] = {}
+
+        sensor_hint = hints.get("sensor")
+        if sensor_hint:
+            sensor = self._resolve_auto_light_sensor(context, sensor_hint)
+            if sensor is not None:
+                changes["sensor_entity_id"] = sensor.id
+
+        target_hint = hints.get("target")
+        if target_hint:
+            target = self._resolve_auto_light_target(context, target_hint)
+            if target is not None:
+                changes["target_entity_id"] = target.id
+
+        return changes
+
+    def _extract_auto_light_mapping_hints(self, lowered: str) -> dict[str, str]:
+        normalized = lowered.replace("-", " ")
+        if "auto light" not in normalized and "automatic light" not in normalized:
+            return {}
+
+        hints: dict[str, str] = {}
+        sensor_patterns = [
+            r"\bsensor to ([a-z0-9 _]+?)(?:\s+and\s+target\b|$)",
+            r"\bsensor as ([a-z0-9 _]+?)(?:\s+and\s+target\b|$)",
+            r"\buse ([a-z0-9 _]+?) as (?:the )?auto light sensor\b",
+        ]
+        target_patterns = [
+            r"\btarget to ([a-z0-9 _]+?)(?:\s+and\s+sensor\b|$)",
+            r"\btarget as ([a-z0-9 _]+?)(?:\s+and\s+sensor\b|$)",
+            r"\buse ([a-z0-9 _]+?) as (?:the )?auto light target\b",
+        ]
+
+        sensor_hint = self._find_first_hint(normalized, sensor_patterns)
+        if sensor_hint:
+            hints["sensor"] = sensor_hint
+
+        target_hint = self._find_first_hint(normalized, target_patterns)
+        if target_hint:
+            hints["target"] = target_hint
+
+        return hints
+
+    def _find_first_hint(self, text: str, patterns: list[str]) -> str | None:
+        for pattern in patterns:
+            match = re.search(pattern, text)
+            if match is None:
+                continue
+            hint = self._clean_mapping_hint(match.group(1))
+            if hint:
+                return hint
+        return None
+
+    def _clean_mapping_hint(self, hint: str) -> str:
+        cleaned = " ".join(hint.strip().split())
+        for prefix in ("the ", "a ", "an "):
+            if cleaned.startswith(prefix):
+                return cleaned[len(prefix) :]
+        return cleaned
+
+    def _resolve_auto_light_sensor(self, context: AssistantContext, hint: str) -> Entity | None:
+        candidates = [entity for entity in context.entities if entity.kind == "sensor.illuminance"]
+        return self._resolve_entity_hint(candidates, hint)
+
+    def _resolve_auto_light_target(self, context: AssistantContext, hint: str) -> Entity | None:
+        candidates = [
+            entity
+            for entity in context.entities
+            if entity.kind == "switch.relay" and entity.writable == 1
+        ]
+        return self._resolve_entity_hint(candidates, hint)
+
+    def _resolve_entity_hint(self, entities: list[Entity], hint: str) -> Entity | None:
+        normalized_hint = hint.lower()
+        for entity in entities:
+            if entity.name.lower() == normalized_hint or entity.id.lower() == normalized_hint:
+                return entity
+        for entity in entities:
+            if normalized_hint in entity.name.lower():
+                return entity
+            if normalized_hint in entity.id.lower():
+                return entity
+            if normalized_hint in entity.capability_id.lower():
+                return entity
+        return None
+
+    def _describe_entity(self, context: AssistantContext, entity_id: str | None) -> str | None:
+        if entity_id is None:
+            return None
+        for entity in context.entities:
+            if entity.id == entity_id:
+                return entity.name
+        return entity_id
 
     def _states_for_kind(self, context: AssistantContext, kind: str) -> list[tuple[Entity, EntityState]]:
         state_map = {state.entity_id: state for state in context.states}
