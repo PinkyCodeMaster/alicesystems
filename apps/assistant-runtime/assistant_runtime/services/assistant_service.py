@@ -30,6 +30,15 @@ class Planner(Protocol):
         states: list[EntityState],
     ) -> PlannerDecision: ...
 
+    async def chat(
+        self,
+        *,
+        recent_messages: list[SessionMessage],
+        devices: list[Device],
+        entities: list[Entity],
+        states: list[EntityState],
+    ) -> str: ...
+
 
 class AssistantService:
     def __init__(
@@ -78,6 +87,7 @@ class AssistantService:
         self.store.append_message(session_id=session_id, role="user", content=message)
 
         lowered = " ".join(message.lower().split())
+        deterministic_action = self._infer_deterministic_action(lowered)
         traces: list[ToolTrace] = []
         recent_messages = self.store.list_messages(
             session_id=session_id,
@@ -118,7 +128,7 @@ class AssistantService:
                 planner_error = str(exc)
                 traces.append(ToolTrace(tool="planner.ollama", status="fallback", detail=str(exc)))
 
-        if planner_action:
+        if planner_action and planner_action != "none":
             response = await self._execute_action(
                 action=planner_action,
                 lowered_message=lowered,
@@ -129,9 +139,34 @@ class AssistantService:
                 planner_target_hint=planner_target_hint,
                 planner_params=planner_params,
             )
+        elif (
+            self.settings.assistant_mode in {"auto", "ollama"}
+            and deterministic_action == "none"
+            and (planner_source == "ollama" or planner_error is not None)
+        ):
+            try:
+                response = await self._respond_with_conversation(
+                    traces=traces,
+                    context=context,
+                    recent_messages=recent_messages,
+                    planner_error=planner_error,
+                )
+            except Exception as exc:
+                fallback_used = True
+                traces.append(ToolTrace(tool="chat.ollama", status="fallback", detail=str(exc)))
+                response = await self._execute_action(
+                    action=deterministic_action,
+                    lowered_message=lowered,
+                    traces=traces,
+                    mode="deterministic",
+                    context=context,
+                    planner_reply=None,
+                    planner_target_hint=None,
+                    planner_params=None,
+                )
         else:
             response = await self._execute_action(
-                action=self._infer_deterministic_action(lowered),
+                action=deterministic_action,
                 lowered_message=lowered,
                 traces=traces,
                 mode="deterministic",
@@ -171,6 +206,36 @@ class AssistantService:
     async def list_messages(self, *, session_id: str) -> list[SessionMessage]:
         self.store.ensure_session(session_id)
         return self.store.list_messages(session_id=session_id)
+
+    async def _respond_with_conversation(
+        self,
+        *,
+        traces: list[ToolTrace],
+        context: AssistantContext | None,
+        recent_messages: list[SessionMessage],
+        planner_error: str | None,
+    ) -> ChatResponse:
+        context = context or await self._load_context(traces)
+        reply = await self.planner.chat(
+            recent_messages=recent_messages,
+            devices=context.devices,
+            entities=context.entities,
+            states=context.states,
+        )
+        traces.append(ToolTrace(tool="chat.ollama", status="ok", detail="Generated conversational reply"))
+        return ChatResponse(
+            session_id="",
+            mode="ollama",
+            success=True,
+            reply=reply,
+            tool_traces=traces,
+            debug=self._build_debug(
+                response_mode="ollama",
+                planner_source="ollama",
+                fallback_used=planner_error is not None,
+                planner_error=planner_error,
+            ),
+        )
 
     async def _execute_action(
         self,

@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     app_name: str = "Alice Assistant Runtime"
     environment: str = "development"
     api_v1_prefix: str = "/api/v1"
+    cors_allow_origins: str = "*"
     assistant_mode: str = "deterministic"
     assistant_allow_fallback: bool = True
     session_store_file: str = "./data/assistant.db"
@@ -35,6 +36,10 @@ class Settings(BaseSettings):
     @property
     def session_store_path(self) -> Path:
         return Path(self.session_store_file).resolve()
+
+    @property
+    def cors_allow_origins_list(self) -> list[str]:
+        return [origin.strip() for origin in self.cors_allow_origins.split(",") if origin.strip()]
 
 
 def load_fallback_home_os_credentials(settings: Settings) -> tuple[str | None, str | None]:

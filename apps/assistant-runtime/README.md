@@ -14,6 +14,7 @@ Implemented now:
 - `POST /api/v1/chat`
 - `GET /api/v1/sessions/{session_id}/messages`
 - SQLite-backed session/thread history
+- natural Ollama chat fallback for non-tool prompts
 - deterministic intent handling for:
   - device detail queries
   - stack health
@@ -33,8 +34,7 @@ Not implemented yet:
 
 - STT
 - TTS
-- memory
-- conversational session state
+- long-term memory
 
 ## Local Setup
 
@@ -67,6 +67,12 @@ OLLAMA_MODEL=<your-local-model>
 
 - skip Ollama entirely
 - use only the local rule-based tool selector
+
+For browser access from the dashboard or a phone on your LAN, the runtime now serves CORS. By default it allows all origins during local development. To lock that down, set:
+
+```env
+CORS_ALLOW_ORIGINS=http://127.0.0.1:3000,http://localhost:3000,http://192.168.0.29:3000
+```
 
 ## Run
 

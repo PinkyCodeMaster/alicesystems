@@ -210,6 +210,16 @@ class FakePlanner:
             target_hint="Bench Light",
         )
 
+    async def chat(
+        self,
+        *,
+        recent_messages: list[SessionMessage],
+        devices: list[Device],
+        entities: list[Entity],
+        states: list[EntityState],
+    ) -> str:
+        return "Hello from planner chat."
+
 
 class FakeThresholdPlanner:
     async def plan(
@@ -227,6 +237,16 @@ class FakeThresholdPlanner:
             reply="Planner updated the auto-light thresholds.",
             params={"on_raw": 3300.0, "off_raw": 2800.0},
         )
+
+    async def chat(
+        self,
+        *,
+        recent_messages: list[SessionMessage],
+        devices: list[Device],
+        entities: list[Entity],
+        states: list[EntityState],
+    ) -> str:
+        return "Hello from planner chat."
 
 
 class FakeMappingPlanner:
@@ -249,6 +269,16 @@ class FakeMappingPlanner:
             },
         )
 
+    async def chat(
+        self,
+        *,
+        recent_messages: list[SessionMessage],
+        devices: list[Device],
+        entities: list[Entity],
+        states: list[EntityState],
+    ) -> str:
+        return "Hello from planner chat."
+
 
 class FakeDeviceDetailPlanner:
     async def plan(
@@ -266,6 +296,68 @@ class FakeDeviceDetailPlanner:
             reply="Planner loaded the bench light details.",
             target_hint="Bench Light",
         )
+
+    async def chat(
+        self,
+        *,
+        recent_messages: list[SessionMessage],
+        devices: list[Device],
+        entities: list[Entity],
+        states: list[EntityState],
+    ) -> str:
+        return "Hello from planner chat."
+
+
+class FakeConversationPlanner:
+    async def plan(
+        self,
+        *,
+        message: str,
+        recent_messages: list[SessionMessage],
+        devices: list[Device],
+        entities: list[Entity],
+        states: list[EntityState],
+    ) -> PlannerDecision:
+        assert recent_messages
+        return PlannerDecision(action="none")
+
+    async def chat(
+        self,
+        *,
+        recent_messages: list[SessionMessage],
+        devices: list[Device],
+        entities: list[Entity],
+        states: list[EntityState],
+    ) -> str:
+        assert recent_messages[-1].content == "hello alice"
+        return "Hey, I'm here. What do you want to work on in the house today?"
+
+
+class FailingConversationPlanner:
+    def __init__(self) -> None:
+        self.chat_called = False
+
+    async def plan(
+        self,
+        *,
+        message: str,
+        recent_messages: list[SessionMessage],
+        devices: list[Device],
+        entities: list[Entity],
+        states: list[EntityState],
+    ) -> PlannerDecision:
+        raise RuntimeError("planner failed")
+
+    async def chat(
+        self,
+        *,
+        recent_messages: list[SessionMessage],
+        devices: list[Device],
+        entities: list[Entity],
+        states: list[EntityState],
+    ) -> str:
+        self.chat_called = True
+        return "Hi. I can chat normally, and I can still help with your devices when you need that."
 
 
 def build_service(tmp_path, *, assistant_mode: str = "deterministic", planner=None) -> AssistantService:
@@ -431,3 +523,36 @@ def test_ollama_planner_can_show_device_detail(tmp_path):
     assert response.mode == "ollama"
     assert response.success is True
     assert response.reply == "Planner loaded the bench light details."
+
+
+def test_ollama_can_reply_naturally_when_no_tool_action_is_needed(tmp_path):
+    service = build_service(tmp_path, assistant_mode="auto", planner=FakeConversationPlanner())
+    response = asyncio.run(_chat(service, "hello alice"))
+    assert response.mode == "ollama"
+    assert response.success is True
+    assert response.reply == "Hey, I'm here. What do you want to work on in the house today?"
+    assert any(trace.tool == "chat.ollama" and trace.status == "ok" for trace in response.tool_traces)
+
+
+def test_ollama_chat_fallback_runs_when_planner_fails_for_plain_conversation(tmp_path):
+    planner = FailingConversationPlanner()
+    service = build_service(tmp_path, assistant_mode="auto", planner=planner)
+    response = asyncio.run(_chat(service, "hello alice"))
+    assert response.mode == "ollama"
+    assert response.success is True
+    assert planner.chat_called is True
+    assert response.reply.startswith("Hi. I can chat normally")
+
+
+def test_tool_commands_still_fall_back_to_deterministic_execution_when_planner_fails(tmp_path):
+    planner = FailingConversationPlanner()
+    service = build_service(tmp_path, assistant_mode="auto", planner=planner)
+    response = asyncio.run(_chat(service, "turn on the bench light"))
+    assert response.mode == "deterministic"
+    assert response.success is True
+    assert planner.chat_called is False
+    assert service.gateway.last_command == (
+        "ent_dev_light_bench_01_relay",
+        "switch.set",
+        {"on": True},
+    )

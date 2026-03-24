@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 import httpx
 
 from assistant_runtime.clients.home_os_gateway import HomeOsGateway
@@ -17,6 +18,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     service = AssistantService(gateway=gateway, settings=settings, store=store)
 
     app = FastAPI(title=settings.app_name, version="0.1.0")
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors_allow_origins_list,
+        allow_credentials=False,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
     @app.get(f"{settings.api_v1_prefix}/health", response_model=HealthResponse)
     async def health() -> HealthResponse:

@@ -40,7 +40,8 @@ export function ModeToggle() {
   const activeTheme = theme ?? "system";
 
   useEffect(() => {
-    setMounted(true);
+    const timeout = window.setTimeout(() => setMounted(true), 0);
+    return () => window.clearTimeout(timeout);
   }, []);
 
   return (
