@@ -162,6 +162,12 @@ AUTO_LIGHT_OFF_RAW=2600
 AUTO_LIGHT_BLOCK_ON_DURING_DAYTIME=true
 AUTO_LIGHT_DAYTIME_START_HOUR=7
 AUTO_LIGHT_DAYTIME_END_HOUR=18
+AUTO_LIGHT_ALLOW_DAYTIME_TURN_ON_WHEN_VERY_DARK=true
+AUTO_LIGHT_DAYTIME_ON_LUX=35
+AUTO_LIGHT_DAYTIME_ON_RAW=3600
+AUTO_LIGHT_MOTION_ENTITY_ID=ent_dev_sensor_hall_01_motion
+AUTO_LIGHT_REQUIRE_MOTION_FOR_TURN_ON=false
+AUTO_LIGHT_MOTION_HOLD_SECONDS=900
 ```
 
 These are now startup defaults only. The persisted setting lives in SQLite and is editable from:
@@ -170,6 +176,11 @@ These are now startup defaults only. The persisted setting lives in SQLite and i
 - `PUT /api/v1/system/auto-light`
 
 The daytime guard blocks automatic turn-on during the configured local daytime window, while still allowing automatic turn-off when the room is already bright enough.
+
+The smarter daytime policy now supports:
+
+- a very-dark daytime override, so a room can still auto-light during the day if the lux or raw reading drops well below normal daytime levels
+- an optional motion gate, so turn-on can require recent occupancy instead of reacting to ambient light alone
 
 Optional development tracing:
 

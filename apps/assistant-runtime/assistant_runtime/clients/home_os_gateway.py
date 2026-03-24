@@ -114,6 +114,7 @@ class HomeOsGateway:
                 "enabled": changes.get("enabled", current.enabled),
                 "sensor_entity_id": changes.get("sensor_entity_id", current.sensor_entity_id),
                 "target_entity_id": changes.get("target_entity_id", current.target_entity_id),
+                "motion_entity_id": changes.get("motion_entity_id", current.motion_entity_id),
                 "mode": changes.get("mode", current.mode),
                 "on_lux": changes.get("on_lux", current.on_lux),
                 "off_lux": changes.get("off_lux", current.off_lux),
@@ -130,6 +131,26 @@ class HomeOsGateway:
                 "daytime_end_hour": changes.get(
                     "daytime_end_hour",
                     current.daytime_end_hour,
+                ),
+                "allow_daytime_turn_on_when_very_dark": changes.get(
+                    "allow_daytime_turn_on_when_very_dark",
+                    current.allow_daytime_turn_on_when_very_dark,
+                ),
+                "daytime_on_lux": changes.get(
+                    "daytime_on_lux",
+                    current.daytime_on_lux,
+                ),
+                "daytime_on_raw": changes.get(
+                    "daytime_on_raw",
+                    current.daytime_on_raw,
+                ),
+                "require_motion_for_turn_on": changes.get(
+                    "require_motion_for_turn_on",
+                    current.require_motion_for_turn_on,
+                ),
+                "motion_hold_seconds": changes.get(
+                    "motion_hold_seconds",
+                    current.motion_hold_seconds,
                 ),
             },
         )
@@ -218,6 +239,7 @@ class HomeOsGateway:
             enabled=data["enabled"],
             sensor_entity_id=data.get("sensor_entity_id"),
             target_entity_id=data.get("target_entity_id"),
+            motion_entity_id=data.get("motion_entity_id"),
             mode=data["mode"],
             on_lux=data["on_lux"],
             off_lux=data["off_lux"],
@@ -226,6 +248,11 @@ class HomeOsGateway:
             block_on_during_daytime=data["block_on_during_daytime"],
             daytime_start_hour=data["daytime_start_hour"],
             daytime_end_hour=data["daytime_end_hour"],
+            allow_daytime_turn_on_when_very_dark=data["allow_daytime_turn_on_when_very_dark"],
+            daytime_on_lux=data["daytime_on_lux"],
+            daytime_on_raw=data["daytime_on_raw"],
+            require_motion_for_turn_on=data["require_motion_for_turn_on"],
+            motion_hold_seconds=data["motion_hold_seconds"],
             source=data["source"],
             updated_at=data.get("updated_at"),
         )

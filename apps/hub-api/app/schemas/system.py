@@ -20,6 +20,7 @@ class AutoLightSettingsResponse(BaseModel):
     enabled: bool
     sensor_entity_id: str | None
     target_entity_id: str | None
+    motion_entity_id: str | None
     mode: str
     on_lux: float
     off_lux: float
@@ -28,6 +29,11 @@ class AutoLightSettingsResponse(BaseModel):
     block_on_during_daytime: bool
     daytime_start_hour: int
     daytime_end_hour: int
+    allow_daytime_turn_on_when_very_dark: bool
+    daytime_on_lux: float
+    daytime_on_raw: float
+    require_motion_for_turn_on: bool
+    motion_hold_seconds: int
     source: str
     updated_at: datetime | None
 
@@ -36,6 +42,7 @@ class AutoLightSettingsUpdateRequest(BaseModel):
     enabled: bool
     sensor_entity_id: str | None = None
     target_entity_id: str | None = None
+    motion_entity_id: str | None = None
     mode: str
     on_lux: float
     off_lux: float
@@ -44,6 +51,11 @@ class AutoLightSettingsUpdateRequest(BaseModel):
     block_on_during_daytime: bool
     daytime_start_hour: int
     daytime_end_hour: int
+    allow_daytime_turn_on_when_very_dark: bool
+    daytime_on_lux: float
+    daytime_on_raw: float
+    require_motion_for_turn_on: bool
+    motion_hold_seconds: int
 
 
 class StackHealthBrokerStatus(BaseModel):

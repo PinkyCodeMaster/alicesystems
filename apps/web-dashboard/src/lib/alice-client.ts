@@ -55,6 +55,7 @@ export type AutoLightSettings = {
   enabled: boolean;
   sensor_entity_id: string | null;
   target_entity_id: string | null;
+  motion_entity_id: string | null;
   mode: string;
   on_lux: number;
   off_lux: number;
@@ -63,6 +64,11 @@ export type AutoLightSettings = {
   block_on_during_daytime: boolean;
   daytime_start_hour: number;
   daytime_end_hour: number;
+  allow_daytime_turn_on_when_very_dark: boolean;
+  daytime_on_lux: number;
+  daytime_on_raw: number;
+  require_motion_for_turn_on: boolean;
+  motion_hold_seconds: number;
   source: string;
   updated_at: string | null;
 };

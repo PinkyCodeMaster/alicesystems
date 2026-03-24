@@ -45,6 +45,12 @@ class Settings(BaseSettings):
     auto_light_block_on_during_daytime: bool = True
     auto_light_daytime_start_hour: int = 7
     auto_light_daytime_end_hour: int = 18
+    auto_light_allow_daytime_turn_on_when_very_dark: bool = True
+    auto_light_daytime_on_lux: float = 35.0
+    auto_light_daytime_on_raw: float = 3600.0
+    auto_light_motion_entity_id: str | None = None
+    auto_light_require_motion_for_turn_on: bool = False
+    auto_light_motion_hold_seconds: int = 900
     auto_light_actor_id: str = "system:auto-light"
     device_offline_timeout_seconds: int = 45
     default_admin_email: str = "scottjones@wolfpackdefence.co.uk"

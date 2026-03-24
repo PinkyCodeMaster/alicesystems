@@ -35,6 +35,7 @@ export function AutoLightForm({
   onChange: (next: AutoLightSettings) => void;
 }) {
   const sensorOptions = entities.filter((entity) => entity.kind === "sensor.illuminance");
+  const motionOptions = entities.filter((entity) => entity.kind === "sensor.motion");
   const targetOptions = entities.filter(
     (entity) => entity.kind === "switch.relay" && entity.writable === 1,
   );
@@ -107,6 +108,78 @@ export function AutoLightForm({
               />
             </div>
 
+            <div className="flex items-center justify-between rounded-2xl border p-4 sm:col-span-2">
+              <div>
+                <Label
+                  htmlFor="allow_daytime_turn_on_when_very_dark"
+                  className="text-sm font-medium"
+                >
+                  Allow daytime turn-on when very dark
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  Lets the light turn on in daytime only when the room is genuinely dark.
+                </p>
+              </div>
+              <Switch
+                id="allow_daytime_turn_on_when_very_dark"
+                checked={autoLight.allow_daytime_turn_on_when_very_dark}
+                onCheckedChange={(checked) =>
+                  onChange({
+                    ...autoLight,
+                    allow_daytime_turn_on_when_very_dark: checked,
+                  })
+                }
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="daytime_on_lux">Daytime override lux</Label>
+              <Input
+                id="daytime_on_lux"
+                type="number"
+                value={autoLight.daytime_on_lux}
+                onChange={(event) =>
+                  onChange({
+                    ...autoLight,
+                    daytime_on_lux: Number(event.target.value),
+                  })
+                }
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="daytime_on_raw">Daytime override raw</Label>
+              <Input
+                id="daytime_on_raw"
+                type="number"
+                value={autoLight.daytime_on_raw}
+                onChange={(event) =>
+                  onChange({
+                    ...autoLight,
+                    daytime_on_raw: Number(event.target.value),
+                  })
+                }
+              />
+            </div>
+
+            <div className="flex items-center justify-between rounded-2xl border p-4 sm:col-span-2">
+              <div>
+                <Label htmlFor="require_motion_for_turn_on" className="text-sm font-medium">
+                  Require recent motion for turn-on
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  Prevents daytime or nighttime auto turn-on unless recent occupancy was seen.
+                </p>
+              </div>
+              <Switch
+                id="require_motion_for_turn_on"
+                checked={autoLight.require_motion_for_turn_on}
+                onCheckedChange={(checked) =>
+                  onChange({ ...autoLight, require_motion_for_turn_on: checked })
+                }
+              />
+            </div>
+
             <div className="space-y-2">
               <Label htmlFor="daytime_start_hour">Daytime start hour</Label>
               <Input
@@ -136,6 +209,50 @@ export function AutoLightForm({
                   onChange({
                     ...autoLight,
                     daytime_end_hour: Number(event.target.value),
+                  })
+                }
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Motion entity</Label>
+              <Select
+                value={autoLight.motion_entity_id ?? "none"}
+                onValueChange={(value) => {
+                  if (!value) {
+                    return;
+                  }
+                  onChange({
+                    ...autoLight,
+                    motion_entity_id: value === "none" ? null : value,
+                  });
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select motion entity" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Not set</SelectItem>
+                  {motionOptions.map((entity) => (
+                    <SelectItem key={entity.id} value={entity.id}>
+                      {entity.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="motion_hold_seconds">Motion hold seconds</Label>
+              <Input
+                id="motion_hold_seconds"
+                type="number"
+                min={0}
+                value={autoLight.motion_hold_seconds}
+                onChange={(event) =>
+                  onChange({
+                    ...autoLight,
+                    motion_hold_seconds: Number(event.target.value),
                   })
                 }
               />

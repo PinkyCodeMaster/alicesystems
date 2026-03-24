@@ -459,7 +459,11 @@ class AssistantService:
                 f"Target: {settings.target_entity_id or 'not set'}. "
                 f"Thresholds: on raw {settings.on_raw}, off raw {settings.off_raw}, on lux {settings.on_lux}, off lux {settings.off_lux}. "
                 f"Daytime block: {'on' if settings.block_on_during_daytime else 'off'} "
-                f"from {settings.daytime_start_hour}:00 to {settings.daytime_end_hour}:00."
+                f"from {settings.daytime_start_hour}:00 to {settings.daytime_end_hour}:00. "
+                f"Very-dark daytime override: {'on' if settings.allow_daytime_turn_on_when_very_dark else 'off'} "
+                f"at lux {settings.daytime_on_lux} / raw {settings.daytime_on_raw}. "
+                f"Motion gate: {'on' if settings.require_motion_for_turn_on else 'off'} "
+                f"using {settings.motion_entity_id or 'no motion sensor'} for {settings.motion_hold_seconds} seconds."
             )
             return ChatResponse(
                 session_id="",

@@ -46,6 +46,7 @@ def put_auto_light_settings(
         enabled=payload.enabled,
         sensor_entity_id=payload.sensor_entity_id,
         target_entity_id=payload.target_entity_id,
+        motion_entity_id=payload.motion_entity_id,
         mode=payload.mode,
         on_lux=payload.on_lux,
         off_lux=payload.off_lux,
@@ -54,6 +55,11 @@ def put_auto_light_settings(
         block_on_during_daytime=payload.block_on_during_daytime,
         daytime_start_hour=payload.daytime_start_hour,
         daytime_end_hour=payload.daytime_end_hour,
+        allow_daytime_turn_on_when_very_dark=payload.allow_daytime_turn_on_when_very_dark,
+        daytime_on_lux=payload.daytime_on_lux,
+        daytime_on_raw=payload.daytime_on_raw,
+        require_motion_for_turn_on=payload.require_motion_for_turn_on,
+        motion_hold_seconds=payload.motion_hold_seconds,
     )
     return AutoLightSettingsResponse(**settings.__dict__)
 

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from sqlalchemy.orm import Session
@@ -26,6 +26,15 @@ class AutomationService:
         settings = self.settings_service.get()
         if not settings.enabled:
             return
+        if self._is_motion_detected(
+            entity_id=entity_id,
+            value=value,
+            motion_entity_id=settings.motion_entity_id,
+        ):
+            self.settings_service.record_motion_detected(
+                detected_at=datetime.now(UTC).replace(tzinfo=None)
+            )
+            return
         if not settings.sensor_entity_id or not settings.target_entity_id:
             return
         if entity_id != settings.sensor_entity_id:
@@ -41,10 +50,17 @@ class AutomationService:
         )
         if desired_on is None:
             return
-        if desired_on and self._should_suppress_daytime_turn_on(
+        if desired_on and self._should_suppress_turn_on(
+            value=value,
+            mode=settings.mode,
             block_on_during_daytime=settings.block_on_during_daytime,
             daytime_start_hour=settings.daytime_start_hour,
             daytime_end_hour=settings.daytime_end_hour,
+            allow_daytime_turn_on_when_very_dark=settings.allow_daytime_turn_on_when_very_dark,
+            daytime_on_lux=settings.daytime_on_lux,
+            daytime_on_raw=settings.daytime_on_raw,
+            require_motion_for_turn_on=settings.require_motion_for_turn_on,
+            motion_hold_seconds=settings.motion_hold_seconds,
         ):
             return
 
@@ -110,7 +126,43 @@ class AutomationService:
             return False
         return None
 
-    def _should_suppress_daytime_turn_on(
+    def _should_suppress_turn_on(
+        self,
+        *,
+        value: dict,
+        mode: str,
+        block_on_during_daytime: bool,
+        daytime_start_hour: int,
+        daytime_end_hour: int,
+        allow_daytime_turn_on_when_very_dark: bool,
+        daytime_on_lux: float,
+        daytime_on_raw: float,
+        require_motion_for_turn_on: bool,
+        motion_hold_seconds: int,
+    ) -> bool:
+        if require_motion_for_turn_on and not self._has_recent_motion(
+            motion_hold_seconds=motion_hold_seconds
+        ):
+            return True
+
+        if not self._is_daytime_window(
+            block_on_during_daytime=block_on_during_daytime,
+            daytime_start_hour=daytime_start_hour,
+            daytime_end_hour=daytime_end_hour,
+        ):
+            return False
+
+        if not allow_daytime_turn_on_when_very_dark:
+            return True
+
+        return not self._is_very_dark_override(
+            value=value,
+            mode=mode,
+            daytime_on_lux=daytime_on_lux,
+            daytime_on_raw=daytime_on_raw,
+        )
+
+    def _is_daytime_window(
         self,
         *,
         block_on_during_daytime: bool,
@@ -126,6 +178,42 @@ class AutomationService:
         if daytime_start_hour < daytime_end_hour:
             return daytime_start_hour <= current_hour < daytime_end_hour
         return current_hour >= daytime_start_hour or current_hour < daytime_end_hour
+
+    def _is_very_dark_override(
+        self,
+        *,
+        value: dict,
+        mode: str,
+        daytime_on_lux: float,
+        daytime_on_raw: float,
+    ) -> bool:
+        if mode == "raw_high_turn_on":
+            raw = self._extract_raw(value)
+            return raw is not None and raw >= daytime_on_raw
+
+        lux = self._extract_lux(value)
+        return lux is not None and lux <= daytime_on_lux
+
+    def _is_motion_detected(
+        self,
+        *,
+        entity_id: str,
+        value: dict,
+        motion_entity_id: str | None,
+    ) -> bool:
+        if not motion_entity_id or entity_id != motion_entity_id:
+            return False
+        return value.get("motion") is True
+
+    def _has_recent_motion(self, *, motion_hold_seconds: int) -> bool:
+        last_motion = self.settings_service.get_last_motion_detected_at()
+        if last_motion is None:
+            return False
+
+        cutoff = datetime.now(UTC).replace(tzinfo=None) - timedelta(
+            seconds=motion_hold_seconds
+        )
+        return last_motion >= cutoff
 
     def _current_local_hour(self) -> int:
         settings = get_settings()

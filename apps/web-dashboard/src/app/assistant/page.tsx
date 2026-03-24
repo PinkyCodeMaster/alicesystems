@@ -165,6 +165,14 @@ export default function AssistantPage() {
                       daytime block: {autoLight.block_on_during_daytime ? "on" : "off"} |{" "}
                       {autoLight.daytime_start_hour}:00-{autoLight.daytime_end_hour}:00
                     </div>
+                    <div>
+                      daytime override: {autoLight.allow_daytime_turn_on_when_very_dark ? "on" : "off"} |{" "}
+                      lux {autoLight.daytime_on_lux} | raw {autoLight.daytime_on_raw}
+                    </div>
+                    <div>
+                      motion gate: {autoLight.require_motion_for_turn_on ? "on" : "off"} |{" "}
+                      {autoLight.motion_entity_id ?? "not set"} | {autoLight.motion_hold_seconds}s
+                    </div>
                   </div>
                 ) : null}
               </div>
