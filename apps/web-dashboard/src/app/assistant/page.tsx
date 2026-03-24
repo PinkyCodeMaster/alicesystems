@@ -161,6 +161,10 @@ export default function AssistantPage() {
                       thresholds: raw {autoLight.on_raw}/{autoLight.off_raw} | lux{" "}
                       {autoLight.on_lux}/{autoLight.off_lux}
                     </div>
+                    <div>
+                      daytime block: {autoLight.block_on_during_daytime ? "on" : "off"} |{" "}
+                      {autoLight.daytime_start_hour}:00-{autoLight.daytime_end_hour}:00
+                    </div>
                   </div>
                 ) : null}
               </div>

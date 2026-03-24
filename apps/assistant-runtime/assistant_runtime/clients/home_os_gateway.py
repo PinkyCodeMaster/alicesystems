@@ -119,6 +119,18 @@ class HomeOsGateway:
                 "off_lux": changes.get("off_lux", current.off_lux),
                 "on_raw": changes.get("on_raw", current.on_raw),
                 "off_raw": changes.get("off_raw", current.off_raw),
+                "block_on_during_daytime": changes.get(
+                    "block_on_during_daytime",
+                    current.block_on_during_daytime,
+                ),
+                "daytime_start_hour": changes.get(
+                    "daytime_start_hour",
+                    current.daytime_start_hour,
+                ),
+                "daytime_end_hour": changes.get(
+                    "daytime_end_hour",
+                    current.daytime_end_hour,
+                ),
             },
         )
         return self._to_auto_light_settings(data)
@@ -211,6 +223,9 @@ class HomeOsGateway:
             off_lux=data["off_lux"],
             on_raw=data["on_raw"],
             off_raw=data["off_raw"],
+            block_on_during_daytime=data["block_on_during_daytime"],
+            daytime_start_hour=data["daytime_start_hour"],
+            daytime_end_hour=data["daytime_end_hour"],
             source=data["source"],
             updated_at=data.get("updated_at"),
         )

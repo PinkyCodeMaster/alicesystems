@@ -51,6 +51,9 @@ def put_auto_light_settings(
         off_lux=payload.off_lux,
         on_raw=payload.on_raw,
         off_raw=payload.off_raw,
+        block_on_during_daytime=payload.block_on_during_daytime,
+        daytime_start_hour=payload.daytime_start_hour,
+        daytime_end_hour=payload.daytime_end_hour,
     )
     return AutoLightSettingsResponse(**settings.__dict__)
 

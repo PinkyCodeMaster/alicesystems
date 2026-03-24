@@ -89,6 +89,58 @@ export function AutoLightForm({
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
+            <div className="flex items-center justify-between rounded-2xl border p-4 sm:col-span-2">
+              <div>
+                <Label htmlFor="block_on_during_daytime" className="text-sm font-medium">
+                  Block turn-on during daytime
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  Prevent auto-light from turning on during the configured daytime window.
+                </p>
+              </div>
+              <Switch
+                id="block_on_during_daytime"
+                checked={autoLight.block_on_during_daytime}
+                onCheckedChange={(checked) =>
+                  onChange({ ...autoLight, block_on_during_daytime: checked })
+                }
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="daytime_start_hour">Daytime start hour</Label>
+              <Input
+                id="daytime_start_hour"
+                type="number"
+                min={0}
+                max={23}
+                value={autoLight.daytime_start_hour}
+                onChange={(event) =>
+                  onChange({
+                    ...autoLight,
+                    daytime_start_hour: Number(event.target.value),
+                  })
+                }
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="daytime_end_hour">Daytime end hour</Label>
+              <Input
+                id="daytime_end_hour"
+                type="number"
+                min={0}
+                max={23}
+                value={autoLight.daytime_end_hour}
+                onChange={(event) =>
+                  onChange({
+                    ...autoLight,
+                    daytime_end_hour: Number(event.target.value),
+                  })
+                }
+              />
+            </div>
+
             <div className="space-y-2">
               <Label>Sensor entity</Label>
               <Select

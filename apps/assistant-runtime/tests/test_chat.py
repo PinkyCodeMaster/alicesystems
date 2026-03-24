@@ -23,6 +23,9 @@ class FakeGateway:
             off_lux=35.0,
             on_raw=3000.0,
             off_raw=2600.0,
+            block_on_during_daytime=True,
+            daytime_start_hour=7,
+            daytime_end_hour=18,
             source="sqlite",
             updated_at="2026-03-23T18:00:00",
         )
@@ -452,6 +455,7 @@ def test_reports_auto_light_status(tmp_path):
     assert response.success is True
     assert "Auto-light is enabled." in response.reply
     assert "raw_high_turn_on" in response.reply
+    assert "Daytime block: on" in response.reply
 
 
 def test_can_disable_auto_light(tmp_path):

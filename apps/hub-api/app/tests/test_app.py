@@ -272,6 +272,7 @@ def test_auto_light_automation_publishes_command(monkeypatch) -> None:
             auto_light_target_entity_id="ent_dev_light_bench_01_relay",
             auto_light_on_lux=120.0,
             auto_light_off_lux=220.0,
+            auto_light_block_on_during_daytime=False,
         )
         with TestClient(create_app(settings)):
             session = get_session_factory()()
@@ -335,6 +336,7 @@ def test_auto_light_raw_threshold_publishes_command(monkeypatch) -> None:
             auto_light_mode="raw_high_turn_on",
             auto_light_on_raw=3000.0,
             auto_light_off_raw=2600.0,
+            auto_light_block_on_during_daytime=False,
         )
         with TestClient(create_app(settings)):
             session = get_session_factory()()
@@ -418,6 +420,9 @@ def test_auto_light_settings_api_drives_automation(monkeypatch) -> None:
                     "off_lux": 220.0,
                     "on_raw": 3000.0,
                     "off_raw": 2600.0,
+                    "block_on_during_daytime": False,
+                    "daytime_start_hour": 7,
+                    "daytime_end_hour": 18,
                 },
                 headers=headers,
             )
@@ -445,6 +450,73 @@ def test_auto_light_settings_api_drives_automation(monkeypatch) -> None:
     assert get_response.json()["source"] == "db"
     assert published["topic"] == "alice/v1/device/dev_light_bench_01/cmd"
     assert published["payload"]["params"] == {"on": True}
+
+
+def test_auto_light_daytime_guard_suppresses_turn_on(monkeypatch) -> None:
+    published = {}
+
+    def _fake_publish(topic: str, payload: dict, *, retain: bool = False) -> bool:
+        published["topic"] = topic
+        published["payload"] = payload
+        published["retain"] = retain
+        return True
+
+    monkeypatch.setattr("app.services.command_service.publish_json", _fake_publish)
+    monkeypatch.setattr(
+        "app.services.automation_service.AutomationService._current_local_hour",
+        lambda self: 13,
+    )
+
+    with TemporaryDirectory() as tmp_dir:
+        settings = Settings(
+            database_url=f"sqlite:///{Path(tmp_dir, 'alice-test.db').as_posix()}",
+            default_admin_email="admin@alice.systems",
+            default_admin_password="change-me",
+            default_admin_display_name="Alice Admin",
+            mqtt_enabled=False,
+            auto_light_enabled=True,
+            auto_light_sensor_entity_id="ent_dev_sensor_hall_01_illuminance",
+            auto_light_target_entity_id="ent_dev_light_bench_01_relay",
+            auto_light_on_lux=120.0,
+            auto_light_off_lux=220.0,
+            auto_light_block_on_during_daytime=True,
+            auto_light_daytime_start_hour=7,
+            auto_light_daytime_end_hour=18,
+        )
+        with TestClient(create_app(settings)):
+            session = get_session_factory()()
+            try:
+                service = MqttIngestService(session)
+                service.process_message(
+                    "alice/v1/device/dev_sensor_hall_01/hello",
+                    """
+                    {
+                      "name": "Hall Sensor",
+                      "model": "alice.sensor.env.s1",
+                      "device_type": "sensor_node",
+                      "fw_version": "0.1.0"
+                    }
+                    """,
+                )
+                service.process_message(
+                    "alice/v1/device/dev_light_bench_01/hello",
+                    """
+                    {
+                      "name": "Bench Light",
+                      "model": "alice.relay.r1",
+                      "device_type": "relay_node",
+                      "fw_version": "0.1.0"
+                    }
+                    """,
+                )
+                service.process_message(
+                    "alice/v1/device/dev_sensor_hall_01/state",
+                    '{"capability":"illuminance","lux":80.0,"raw":3200}',
+                )
+            finally:
+                session.close()
+
+    assert published == {}
 
 
 def test_device_offline_timeout_marks_device_offline() -> None:

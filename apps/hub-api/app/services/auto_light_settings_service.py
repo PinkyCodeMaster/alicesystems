@@ -24,6 +24,9 @@ class AutoLightSettings:
     off_lux: float
     on_raw: float
     off_raw: float
+    block_on_during_daytime: bool
+    daytime_start_hour: int
+    daytime_end_hour: int
     source: str
     updated_at: datetime | None = None
 
@@ -50,6 +53,18 @@ class AutoLightSettingsService:
             off_lux=float(payload.get("off_lux", settings.auto_light_off_lux)),
             on_raw=float(payload.get("on_raw", settings.auto_light_on_raw)),
             off_raw=float(payload.get("off_raw", settings.auto_light_off_raw)),
+            block_on_during_daytime=bool(
+                payload.get(
+                    "block_on_during_daytime",
+                    settings.auto_light_block_on_during_daytime,
+                )
+            ),
+            daytime_start_hour=int(
+                payload.get("daytime_start_hour", settings.auto_light_daytime_start_hour)
+            ),
+            daytime_end_hour=int(
+                payload.get("daytime_end_hour", settings.auto_light_daytime_end_hour)
+            ),
             source="db",
             updated_at=setting.updated_at,
         )
@@ -65,6 +80,9 @@ class AutoLightSettingsService:
         off_lux: float,
         on_raw: float,
         off_raw: float,
+        block_on_during_daytime: bool,
+        daytime_start_hour: int,
+        daytime_end_hour: int,
     ) -> AutoLightSettings:
         now = datetime.now(UTC).replace(tzinfo=None)
         site = self.site_service.get_or_create_default_site()
@@ -77,6 +95,9 @@ class AutoLightSettingsService:
             "off_lux": off_lux,
             "on_raw": on_raw,
             "off_raw": off_raw,
+            "block_on_during_daytime": block_on_during_daytime,
+            "daytime_start_hour": daytime_start_hour,
+            "daytime_end_hour": daytime_end_hour,
         }
         setting = self.repo.get_by_key(AUTO_LIGHT_SETTINGS_KEY)
         if setting is None:
@@ -104,6 +125,9 @@ class AutoLightSettingsService:
             off_lux=settings.auto_light_off_lux,
             on_raw=settings.auto_light_on_raw,
             off_raw=settings.auto_light_off_raw,
+            block_on_during_daytime=settings.auto_light_block_on_during_daytime,
+            daytime_start_hour=settings.auto_light_daytime_start_hour,
+            daytime_end_hour=settings.auto_light_daytime_end_hour,
             source="env",
             updated_at=None,
         )

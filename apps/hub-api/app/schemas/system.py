@@ -25,6 +25,9 @@ class AutoLightSettingsResponse(BaseModel):
     off_lux: float
     on_raw: float
     off_raw: float
+    block_on_during_daytime: bool
+    daytime_start_hour: int
+    daytime_end_hour: int
     source: str
     updated_at: datetime | None
 
@@ -38,6 +41,9 @@ class AutoLightSettingsUpdateRequest(BaseModel):
     off_lux: float
     on_raw: float
     off_raw: float
+    block_on_during_daytime: bool
+    daytime_start_hour: int
+    daytime_end_hour: int
 
 
 class StackHealthBrokerStatus(BaseModel):

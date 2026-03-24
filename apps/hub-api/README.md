@@ -159,12 +159,17 @@ AUTO_LIGHT_TARGET_ENTITY_ID=ent_dev_light_bench_01_relay
 AUTO_LIGHT_MODE=raw_high_turn_on
 AUTO_LIGHT_ON_RAW=3000
 AUTO_LIGHT_OFF_RAW=2600
+AUTO_LIGHT_BLOCK_ON_DURING_DAYTIME=true
+AUTO_LIGHT_DAYTIME_START_HOUR=7
+AUTO_LIGHT_DAYTIME_END_HOUR=18
 ```
 
 These are now startup defaults only. The persisted setting lives in SQLite and is editable from:
 
 - `GET /api/v1/system/auto-light`
 - `PUT /api/v1/system/auto-light`
+
+The daytime guard blocks automatic turn-on during the configured local daytime window, while still allowing automatic turn-off when the room is already bright enough.
 
 Optional development tracing:
 

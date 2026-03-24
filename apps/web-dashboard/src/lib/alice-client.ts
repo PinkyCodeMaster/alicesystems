@@ -60,6 +60,9 @@ export type AutoLightSettings = {
   off_lux: number;
   on_raw: number;
   off_raw: number;
+  block_on_during_daytime: boolean;
+  daytime_start_hour: number;
+  daytime_end_hour: number;
   source: string;
   updated_at: string | null;
 };

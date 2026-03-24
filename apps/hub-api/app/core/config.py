@@ -42,6 +42,9 @@ class Settings(BaseSettings):
     auto_light_off_lux: float = 220.0
     auto_light_on_raw: float = 3000.0
     auto_light_off_raw: float = 2600.0
+    auto_light_block_on_during_daytime: bool = True
+    auto_light_daytime_start_hour: int = 7
+    auto_light_daytime_end_hour: int = 18
     auto_light_actor_id: str = "system:auto-light"
     device_offline_timeout_seconds: int = 45
     default_admin_email: str = "scottjones@wolfpackdefence.co.uk"

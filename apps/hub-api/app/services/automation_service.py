@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from sqlalchemy.orm import Session
 
@@ -38,6 +40,12 @@ class AutomationService:
             off_raw=settings.off_raw,
         )
         if desired_on is None:
+            return
+        if desired_on and self._should_suppress_daytime_turn_on(
+            block_on_during_daytime=settings.block_on_during_daytime,
+            daytime_start_hour=settings.daytime_start_hour,
+            daytime_end_hour=settings.daytime_end_hour,
+        ):
             return
 
         target_entity = self.entity_repo.get_by_id(settings.target_entity_id)
@@ -101,3 +109,24 @@ class AutomationService:
         if lux >= off_lux:
             return False
         return None
+
+    def _should_suppress_daytime_turn_on(
+        self,
+        *,
+        block_on_during_daytime: bool,
+        daytime_start_hour: int,
+        daytime_end_hour: int,
+    ) -> bool:
+        if not block_on_during_daytime:
+            return False
+
+        current_hour = self._current_local_hour()
+        if daytime_start_hour == daytime_end_hour:
+            return False
+        if daytime_start_hour < daytime_end_hour:
+            return daytime_start_hour <= current_hour < daytime_end_hour
+        return current_hour >= daytime_start_hour or current_hour < daytime_end_hour
+
+    def _current_local_hour(self) -> int:
+        settings = get_settings()
+        return datetime.now(ZoneInfo(settings.timezone)).hour

@@ -457,7 +457,9 @@ class AssistantService:
                 f"Mode: {settings.mode}. "
                 f"Sensor: {settings.sensor_entity_id or 'not set'}. "
                 f"Target: {settings.target_entity_id or 'not set'}. "
-                f"Thresholds: on raw {settings.on_raw}, off raw {settings.off_raw}, on lux {settings.on_lux}, off lux {settings.off_lux}."
+                f"Thresholds: on raw {settings.on_raw}, off raw {settings.off_raw}, on lux {settings.on_lux}, off lux {settings.off_lux}. "
+                f"Daytime block: {'on' if settings.block_on_during_daytime else 'off'} "
+                f"from {settings.daytime_start_hour}:00 to {settings.daytime_end_hour}:00."
             )
             return ChatResponse(
                 session_id="",
