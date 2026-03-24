@@ -63,19 +63,22 @@ class HomeOsGateway:
         return self._to_auto_light_settings(data)
 
     async def update_auto_light_enabled(self, *, enabled: bool) -> AutoLightSettings:
+        return await self.update_auto_light_settings(enabled=enabled)
+
+    async def update_auto_light_settings(self, **changes: Any) -> AutoLightSettings:
         current = await self.get_auto_light_settings()
         data = await self._request(
             "PUT",
             "/system/auto-light",
             json={
-                "enabled": enabled,
-                "sensor_entity_id": current.sensor_entity_id,
-                "target_entity_id": current.target_entity_id,
-                "mode": current.mode,
-                "on_lux": current.on_lux,
-                "off_lux": current.off_lux,
-                "on_raw": current.on_raw,
-                "off_raw": current.off_raw,
+                "enabled": changes.get("enabled", current.enabled),
+                "sensor_entity_id": changes.get("sensor_entity_id", current.sensor_entity_id),
+                "target_entity_id": changes.get("target_entity_id", current.target_entity_id),
+                "mode": changes.get("mode", current.mode),
+                "on_lux": changes.get("on_lux", current.on_lux),
+                "off_lux": changes.get("off_lux", current.off_lux),
+                "on_raw": changes.get("on_raw", current.on_raw),
+                "off_raw": changes.get("off_raw", current.off_raw),
             },
         )
         return self._to_auto_light_settings(data)

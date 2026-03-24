@@ -21,6 +21,7 @@ Implemented now:
   - light level queries
   - auto-light status queries
   - enabling/disabling auto-light through Home OS tool routes
+  - auto-light threshold edits through Home OS tool routes
   - recent audit event summaries
   - turning the relay on/off through Home OS tool routes
 - optional Ollama planner with deterministic fallback
@@ -136,4 +137,4 @@ Inspect whether a reply came from Ollama or deterministic fallback in:
 - no voice pipeline yet
 - no streaming responses
 - no memory layer yet
-- no assistant support yet for editing automation thresholds or richer Home OS workflows
+- no assistant support yet for choosing auto-light sensor/target mappings or richer Home OS workflows

@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Protocol
+import re
+from typing import Any, Protocol
 
 from assistant_runtime.clients.home_os_gateway import HomeOsGateway
 from assistant_runtime.core.config import Settings
@@ -88,6 +89,7 @@ class AssistantService:
         planner_reply: str | None = None
         planner_action: str | None = None
         planner_target_hint: str | None = None
+        planner_params: dict[str, Any] | None = None
         planner_source = "deterministic"
         fallback_used = False
         planner_error: str | None = None
@@ -108,6 +110,7 @@ class AssistantService:
                 planner_reply = decision.reply
                 planner_action = decision.action
                 planner_target_hint = decision.target_hint
+                planner_params = decision.params
             except Exception as exc:
                 if self.settings.assistant_mode == "ollama" and not self.settings.assistant_allow_fallback:
                     raise
@@ -124,6 +127,7 @@ class AssistantService:
                 context=context,
                 planner_reply=planner_reply,
                 planner_target_hint=planner_target_hint,
+                planner_params=planner_params,
             )
         else:
             response = await self._execute_action(
@@ -134,6 +138,7 @@ class AssistantService:
                 context=context,
                 planner_reply=None,
                 planner_target_hint=None,
+                planner_params=None,
             )
 
         response.debug = self._build_debug(
@@ -177,6 +182,7 @@ class AssistantService:
         context: AssistantContext | None,
         planner_reply: str | None,
         planner_target_hint: str | None,
+        planner_params: dict[str, Any] | None,
     ) -> ChatResponse:
         if action == "stack_health":
             health = await self.gateway.get_stack_health()
@@ -241,6 +247,49 @@ class AssistantService:
                 f"Auto-light is now {'enabled' if settings.enabled else 'disabled'}. "
                 f"Mode: {settings.mode}. "
                 f"Target: {settings.target_entity_id or 'not set'}."
+            )
+            return ChatResponse(
+                session_id="",
+                mode=mode,
+                success=True,
+                reply=reply,
+                tool_traces=traces,
+                debug=self._build_debug(
+                    response_mode=mode,
+                    planner_source=("ollama" if mode == "ollama" else "deterministic"),
+                    fallback_used=False,
+                    planner_error=None,
+                ),
+            )
+
+        if action == "update_auto_light_thresholds":
+            changes = planner_params or self._extract_auto_light_threshold_changes(lowered_message)
+            if not changes:
+                return ChatResponse(
+                    session_id="",
+                    mode=mode,
+                    success=False,
+                    reply="I could not determine which auto-light thresholds to change. Try specifying on/off and raw/lux values.",
+                    tool_traces=traces,
+                    debug=self._build_debug(
+                        response_mode=mode,
+                        planner_source=("ollama" if mode == "ollama" else "deterministic"),
+                        fallback_used=False,
+                        planner_error=None,
+                    ),
+                )
+            settings = await self.gateway.update_auto_light_settings(**changes)
+            traces.append(
+                ToolTrace(
+                    tool="system.auto_light.put",
+                    status="ok",
+                    detail="Updated auto-light thresholds",
+                )
+            )
+            reply = planner_reply or (
+                "Updated auto-light thresholds. "
+                f"On raw: {settings.on_raw}, off raw: {settings.off_raw}, "
+                f"on lux: {settings.on_lux}, off lux: {settings.off_lux}."
             )
             return ChatResponse(
                 session_id="",
@@ -425,7 +474,8 @@ class AssistantService:
             success=False,
             reply=(
                 "I can currently show stack health, list online devices, report temperature or light readings, "
-                "turn the light relay on or off, show or toggle auto-light, and list recent audit events."
+                "turn the light relay on or off, show or toggle auto-light, edit auto-light thresholds, "
+                "and list recent audit events."
             ),
             tool_traces=traces,
             debug=self._build_debug(
@@ -469,6 +519,8 @@ class AssistantService:
         if any(phrase in lowered for phrase in ("stack health", "system health", "hub health")):
             return "stack_health"
         if "auto light" in normalized or "automatic light" in normalized:
+            if self._extract_auto_light_threshold_changes(normalized):
+                return "update_auto_light_thresholds"
             if any(
                 phrase in normalized
                 for phrase in (
@@ -502,6 +554,47 @@ class AssistantService:
         if any(term in lowered for term in ("turn off", "switch off", "light off")):
             return "turn_light_off"
         return "none"
+
+    def _extract_auto_light_threshold_changes(self, lowered: str) -> dict[str, float]:
+        normalized = lowered.replace("-", " ")
+        if "auto light" not in normalized and "automatic light" not in normalized:
+            return {}
+
+        changes: dict[str, float] = {}
+        patterns = {
+            "on_raw": [
+                r"\bon raw\b[^0-9-]*(-?\d+(?:\.\d+)?)",
+                r"\braw on\b[^0-9-]*(-?\d+(?:\.\d+)?)",
+            ],
+            "off_raw": [
+                r"\boff raw\b[^0-9-]*(-?\d+(?:\.\d+)?)",
+                r"\braw off\b[^0-9-]*(-?\d+(?:\.\d+)?)",
+            ],
+            "on_lux": [
+                r"\bon lux\b[^0-9-]*(-?\d+(?:\.\d+)?)",
+                r"\blux on\b[^0-9-]*(-?\d+(?:\.\d+)?)",
+            ],
+            "off_lux": [
+                r"\boff lux\b[^0-9-]*(-?\d+(?:\.\d+)?)",
+                r"\blux off\b[^0-9-]*(-?\d+(?:\.\d+)?)",
+            ],
+        }
+        for key, key_patterns in patterns.items():
+            value = self._find_first_float(normalized, key_patterns)
+            if value is not None:
+                changes[key] = value
+        return changes
+
+    def _find_first_float(self, text: str, patterns: list[str]) -> float | None:
+        for pattern in patterns:
+            match = re.search(pattern, text)
+            if match is None:
+                continue
+            try:
+                return float(match.group(1))
+            except ValueError:
+                continue
+        return None
 
     def _states_for_kind(self, context: AssistantContext, kind: str) -> list[tuple[Entity, EntityState]]:
         state_map = {state.entity_id: state for state in context.states}

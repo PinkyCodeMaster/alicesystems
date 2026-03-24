@@ -13,6 +13,7 @@ from assistant_runtime.services.session_store import SessionStore
 class FakeGateway:
     def __init__(self) -> None:
         self.last_command: tuple[str, str, dict] | None = None
+        self.last_auto_light_update: dict | None = None
         self.auto_light_settings = AutoLightSettings(
             enabled=True,
             sensor_entity_id="ent_dev_sensor_hall_01_illuminance",
@@ -101,6 +102,12 @@ class FakeGateway:
         self.auto_light_settings.enabled = enabled
         return self.auto_light_settings
 
+    async def update_auto_light_settings(self, **changes):
+        self.last_auto_light_update = changes
+        for key, value in changes.items():
+            setattr(self.auto_light_settings, key, value)
+        return self.auto_light_settings
+
     async def list_audit_events(self, *, limit: int = 5):
         return self.audit_events[:limit]
 
@@ -124,6 +131,24 @@ class FakePlanner:
             action="turn_light_off",
             reply="Planner chose to turn the bench light off.",
             target_hint="Bench Light",
+        )
+
+
+class FakeThresholdPlanner:
+    async def plan(
+        self,
+        *,
+        message: str,
+        recent_messages: list[SessionMessage],
+        devices: list[Device],
+        entities: list[Entity],
+        states: list[EntityState],
+    ) -> PlannerDecision:
+        assert recent_messages
+        return PlannerDecision(
+            action="update_auto_light_thresholds",
+            reply="Planner updated the auto-light thresholds.",
+            params={"on_raw": 3300.0, "off_raw": 2800.0},
         )
 
 
@@ -196,6 +221,24 @@ def test_lists_recent_audit_events(tmp_path):
     assert "device.ack.received" in response.reply
 
 
+def test_can_update_single_auto_light_threshold(tmp_path):
+    service = build_service(tmp_path)
+    response = asyncio.run(_chat(service, "set auto-light on raw to 3200"))
+    assert response.success is True
+    assert "Updated auto-light thresholds." in response.reply
+    assert service.gateway.last_auto_light_update == {"on_raw": 3200.0}
+    assert service.gateway.auto_light_settings.on_raw == 3200.0
+
+
+def test_can_update_multiple_auto_light_thresholds(tmp_path):
+    service = build_service(tmp_path)
+    response = asyncio.run(_chat(service, "set auto light on lux to 60 and off lux to 40"))
+    assert response.success is True
+    assert service.gateway.last_auto_light_update == {"on_lux": 60.0, "off_lux": 40.0}
+    assert service.gateway.auto_light_settings.on_lux == 60.0
+    assert service.gateway.auto_light_settings.off_lux == 40.0
+
+
 def test_persists_session_history(tmp_path):
     service = build_service(tmp_path)
     first = asyncio.run(_chat(service, "what devices are online"))
@@ -219,3 +262,12 @@ def test_ollama_planner_can_choose_action(tmp_path):
         "switch.set",
         {"on": False},
     )
+
+
+def test_ollama_planner_can_update_auto_light_thresholds(tmp_path):
+    service = build_service(tmp_path, assistant_mode="auto", planner=FakeThresholdPlanner())
+    response = asyncio.run(_chat(service, "make auto-light less sensitive"))
+    assert response.mode == "ollama"
+    assert response.success is True
+    assert response.reply == "Planner updated the auto-light thresholds."
+    assert service.gateway.last_auto_light_update == {"on_raw": 3300.0, "off_raw": 2800.0}

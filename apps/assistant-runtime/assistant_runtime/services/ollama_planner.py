@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from typing import Any
 
 import httpx
 
@@ -14,6 +15,7 @@ class PlannerDecision:
     action: str
     reply: str | None = None
     target_hint: str | None = None
+    params: dict[str, Any] | None = None
 
 
 class OllamaPlanner:
@@ -68,7 +70,8 @@ class OllamaPlanner:
         action = str(payload.get("action", "none")).strip().lower()
         reply = payload.get("reply")
         target_hint = payload.get("target_hint")
-        return PlannerDecision(action=action, reply=reply, target_hint=target_hint)
+        params = payload.get("params") if isinstance(payload.get("params"), dict) else None
+        return PlannerDecision(action=action, reply=reply, target_hint=target_hint, params=params)
 
     def _build_prompt(
         self,
@@ -107,6 +110,7 @@ Allowed actions:
 - show_auto_light_status
 - enable_auto_light
 - disable_auto_light
+- update_auto_light_thresholds
 - list_recent_audit_events
 - list_online_devices
 - report_temperature
@@ -119,6 +123,8 @@ Rules:
 - Do not invent devices or state.
 - If the user refers to an earlier device indirectly, use target_hint to name it.
 - If unsure, use action "none".
+- Only use params for numeric settings changes.
+- Allowed params keys for threshold edits: on_raw, off_raw, on_lux, off_lux.
 - Keep reply concise and factual.
 
 Conversation history:
@@ -137,7 +143,13 @@ Return exactly one JSON object with this shape:
 {{
   "action": "one allowed action string",
   "reply": "short reply for the user",
-  "target_hint": "optional device/entity name if relevant"
+  "target_hint": "optional device/entity name if relevant",
+  "params": {{
+    "on_raw": 3000,
+    "off_raw": 2600,
+    "on_lux": 50,
+    "off_lux": 35
+  }}
 }}
 """.strip()
 
