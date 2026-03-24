@@ -489,7 +489,7 @@ class AssistantService:
                     detail=f"{'Enabled' if enabled else 'Disabled'} auto-light",
                 )
             )
-            reply = planner_reply or (
+            reply = (
                 f"Auto-light is now {'enabled' if settings.enabled else 'disabled'}. "
                 f"Mode: {settings.mode}. "
                 f"Target: {settings.target_entity_id or 'not set'}."
@@ -509,7 +509,8 @@ class AssistantService:
             )
 
         if action == "update_auto_light_thresholds":
-            changes = planner_params or self._extract_auto_light_threshold_changes(lowered_message)
+            parsed_changes = self._extract_auto_light_threshold_changes(lowered_message)
+            changes = {**(planner_params or {}), **parsed_changes} if planner_params else parsed_changes
             if not changes:
                 return ChatResponse(
                     session_id="",
@@ -532,7 +533,7 @@ class AssistantService:
                     detail="Updated auto-light thresholds",
                 )
             )
-            reply = planner_reply or (
+            reply = (
                 "Updated auto-light thresholds. "
                 f"On raw: {settings.on_raw}, off raw: {settings.off_raw}, "
                 f"on lux: {settings.on_lux}, off lux: {settings.off_lux}."
@@ -552,7 +553,8 @@ class AssistantService:
             )
 
         if action == "update_auto_light_mapping":
-            changes = planner_params or self._extract_auto_light_mapping_changes(lowered_message, context)
+            parsed_changes = self._extract_auto_light_mapping_changes(lowered_message, context)
+            changes = {**(planner_params or {}), **parsed_changes} if planner_params else parsed_changes
             if not changes:
                 return ChatResponse(
                     session_id="",
@@ -575,10 +577,62 @@ class AssistantService:
                     detail="Updated auto-light mapping",
                 )
             )
-            reply = planner_reply or (
+            reply = (
                 "Updated auto-light mapping. "
                 f"Sensor: {self._describe_entity(context, settings.sensor_entity_id) or 'not set'}. "
                 f"Target: {self._describe_entity(context, settings.target_entity_id) or 'not set'}."
+            )
+            return ChatResponse(
+                session_id="",
+                mode=mode,
+                success=True,
+                reply=reply,
+                tool_traces=traces,
+                debug=self._build_debug(
+                    response_mode=mode,
+                    planner_source=("ollama" if mode == "ollama" else "deterministic"),
+                    fallback_used=False,
+                    planner_error=None,
+                ),
+            )
+
+        if action == "update_auto_light_policy":
+            parsed_changes = self._extract_auto_light_policy_changes(lowered_message, context)
+            changes = {**(planner_params or {}), **parsed_changes} if planner_params else parsed_changes
+            if not changes:
+                return ChatResponse(
+                    session_id="",
+                    mode=mode,
+                    success=False,
+                    reply=(
+                        "I could not determine which auto-light policy setting to change. "
+                        "Try naming the daytime block, override, motion gate, motion sensor, or hours explicitly."
+                    ),
+                    tool_traces=traces,
+                    debug=self._build_debug(
+                        response_mode=mode,
+                        planner_source=("ollama" if mode == "ollama" else "deterministic"),
+                        fallback_used=False,
+                        planner_error=None,
+                    ),
+                )
+            settings = await self.gateway.update_auto_light_settings(**changes)
+            traces.append(
+                ToolTrace(
+                    tool="system.auto_light.put",
+                    status="ok",
+                    detail="Updated auto-light policy",
+                )
+            )
+            reply = (
+                "Updated auto-light policy. "
+                f"Daytime block: {'on' if settings.block_on_during_daytime else 'off'} "
+                f"from {settings.daytime_start_hour}:00 to {settings.daytime_end_hour}:00. "
+                f"Very-dark override: {'on' if settings.allow_daytime_turn_on_when_very_dark else 'off'} "
+                f"at lux {settings.daytime_on_lux} / raw {settings.daytime_on_raw}. "
+                f"Motion gate: {'on' if settings.require_motion_for_turn_on else 'off'} "
+                f"using {self._describe_entity(context, settings.motion_entity_id) or 'no motion sensor'} "
+                f"for {settings.motion_hold_seconds} seconds."
             )
             return ChatResponse(
                 session_id="",
@@ -737,7 +791,7 @@ class AssistantService:
                     detail=f"{'Turned on' if should_turn_on else 'Turned off'} {target.name}",
                 )
             )
-            reply = planner_reply or (
+            reply = (
                 f"Queued {'turn-on' if should_turn_on else 'turn-off'} command for {target.name}. "
                 f"Topic: {result['topic']}."
             )
@@ -761,7 +815,7 @@ class AssistantService:
             success=False,
             reply=(
                 "I can currently show stack health, list online devices, show device details, report temperature or light readings, "
-                "turn the light relay on or off, show or toggle auto-light, edit auto-light thresholds or mappings, "
+                "turn the light relay on or off, show or toggle auto-light, edit auto-light thresholds, mappings, or policy, "
                 "and list recent audit events."
             ),
             tool_traces=traces,
@@ -811,6 +865,8 @@ class AssistantService:
         ):
             return "show_device_detail"
         if "auto light" in normalized or "automatic light" in normalized:
+            if self._looks_like_auto_light_policy_update(normalized):
+                return "update_auto_light_policy"
             if self._looks_like_auto_light_mapping_update(normalized):
                 return "update_auto_light_mapping"
             if self._extract_auto_light_threshold_changes(normalized):
@@ -879,6 +935,140 @@ class AssistantService:
                 changes[key] = value
         return changes
 
+    def _looks_like_auto_light_policy_update(self, lowered: str) -> bool:
+        normalized = lowered.replace("-", " ")
+        policy_keywords = (
+            "daytime block",
+            "daytime start",
+            "daytime end",
+            "very dark",
+            "override lux",
+            "override raw",
+            "motion gate",
+            "motion hold",
+            "motion sensor",
+            "motion entity",
+            "require motion",
+        )
+        return any(keyword in normalized for keyword in policy_keywords)
+
+    def _extract_auto_light_policy_changes(
+        self,
+        lowered: str,
+        context: AssistantContext,
+    ) -> dict[str, Any]:
+        normalized = lowered.replace("-", " ")
+        if "auto light" not in normalized and "automatic light" not in normalized:
+            return {}
+
+        changes: dict[str, Any] = {}
+        bool_patterns: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
+            "block_on_during_daytime": (
+                (
+                    "enable daytime block",
+                    "turn on daytime block",
+                    "daytime block on",
+                    "block auto light during daytime",
+                    "block auto light during the day",
+                ),
+                (
+                    "disable daytime block",
+                    "turn off daytime block",
+                    "daytime block off",
+                    "do not block auto light during daytime",
+                    "don't block auto light during daytime",
+                    "allow auto light during daytime",
+                ),
+            ),
+            "allow_daytime_turn_on_when_very_dark": (
+                (
+                    "enable very dark override",
+                    "turn on very dark override",
+                    "allow very dark override",
+                    "allow daytime override",
+                ),
+                (
+                    "disable very dark override",
+                    "turn off very dark override",
+                    "stop allowing very dark override",
+                    "disable daytime override",
+                ),
+            ),
+            "require_motion_for_turn_on": (
+                (
+                    "require motion",
+                    "turn on motion gate",
+                    "enable motion gate",
+                    "motion gate on",
+                ),
+                (
+                    "don't require motion",
+                    "do not require motion",
+                    "turn off motion gate",
+                    "disable motion gate",
+                    "motion gate off",
+                ),
+            ),
+        }
+        for key, (enabled_patterns, disabled_patterns) in bool_patterns.items():
+            maybe_value = self._match_boolean_phrase(
+                normalized,
+                enabled_patterns=enabled_patterns,
+                disabled_patterns=disabled_patterns,
+            )
+            if maybe_value is not None:
+                changes[key] = maybe_value
+
+        number_patterns = {
+            "daytime_start_hour": [
+                r"\bdaytime start(?: hour)?(?: to| at)?[^0-9]*(\d{1,2})",
+                r"\bstart daytime(?: at)?[^0-9]*(\d{1,2})",
+            ],
+            "daytime_end_hour": [
+                r"\bdaytime end(?: hour)?(?: to| at)?[^0-9]*(\d{1,2})",
+                r"\bend daytime(?: at)?[^0-9]*(\d{1,2})",
+            ],
+            "daytime_on_lux": [
+                r"\bdaytime override lux(?: to)?[^0-9-]*(-?\d+(?:\.\d+)?)",
+                r"\bvery dark lux(?: to)?[^0-9-]*(-?\d+(?:\.\d+)?)",
+                r"\boverride lux(?: to)?[^0-9-]*(-?\d+(?:\.\d+)?)",
+            ],
+            "daytime_on_raw": [
+                r"\bdaytime override raw(?: to)?[^0-9-]*(-?\d+(?:\.\d+)?)",
+                r"\bvery dark raw(?: to)?[^0-9-]*(-?\d+(?:\.\d+)?)",
+                r"\boverride raw(?: to)?[^0-9-]*(-?\d+(?:\.\d+)?)",
+            ],
+            "motion_hold_seconds": [
+                r"\bmotion hold(?: seconds)?(?: to| for)?[^0-9]*(\d+)",
+                r"\bhold motion(?: for)?[^0-9]*(\d+)",
+            ],
+        }
+        for key, patterns in number_patterns.items():
+            value = self._find_first_float(normalized, patterns)
+            if value is None:
+                continue
+            changes[key] = (
+                int(value)
+                if key in {"daytime_start_hour", "daytime_end_hour", "motion_hold_seconds"}
+                else value
+            )
+
+        motion_hint = self._find_first_hint(
+            normalized,
+            [
+                r"\bmotion sensor to ([a-z0-9 _]+?)(?:\s+and\b|$)",
+                r"\bmotion entity to ([a-z0-9 _]+?)(?:\s+and\b|$)",
+                r"\bmotion sensor as ([a-z0-9 _]+?)(?:\s+and\b|$)",
+                r"\buse ([a-z0-9 _]+?) as (?:the )?auto light motion sensor\b",
+            ],
+        )
+        if motion_hint:
+            motion_entity = self._resolve_auto_light_motion_sensor(context, motion_hint)
+            if motion_entity is not None:
+                changes["motion_entity_id"] = motion_entity.id
+
+        return changes
+
     def _find_first_float(self, text: str, patterns: list[str]) -> float | None:
         for pattern in patterns:
             match = re.search(pattern, text)
@@ -888,6 +1078,19 @@ class AssistantService:
                 return float(match.group(1))
             except ValueError:
                 continue
+        return None
+
+    def _match_boolean_phrase(
+        self,
+        text: str,
+        *,
+        enabled_patterns: tuple[str, ...],
+        disabled_patterns: tuple[str, ...],
+    ) -> bool | None:
+        if any(pattern in text for pattern in disabled_patterns):
+            return False
+        if any(pattern in text for pattern in enabled_patterns):
+            return True
         return None
 
     def _looks_like_auto_light_mapping_update(self, lowered: str) -> bool:
@@ -966,6 +1169,10 @@ class AssistantService:
             for entity in context.entities
             if entity.kind == "switch.relay" and entity.writable == 1
         ]
+        return self._resolve_entity_hint(candidates, hint)
+
+    def _resolve_auto_light_motion_sensor(self, context: AssistantContext, hint: str) -> Entity | None:
+        candidates = [entity for entity in context.entities if entity.kind == "sensor.motion"]
         return self._resolve_entity_hint(candidates, hint)
 
     def _resolve_entity_hint(self, entities: list[Entity], hint: str) -> Entity | None:

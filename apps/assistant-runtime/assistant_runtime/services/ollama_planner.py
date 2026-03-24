@@ -197,6 +197,7 @@ Allowed actions:
 - disable_auto_light
 - update_auto_light_thresholds
 - update_auto_light_mapping
+- update_auto_light_policy
 - list_recent_audit_events
 - list_online_devices
 - report_temperature
@@ -209,8 +210,8 @@ Rules:
 - Do not invent devices or state.
 - If the user refers to an earlier device indirectly, use target_hint to name it.
 - If unsure, use action "none".
-- Only use params for numeric settings changes.
-- Allowed params keys for settings edits: on_raw, off_raw, on_lux, off_lux, sensor_entity_id, target_entity_id.
+- Only use params for settings changes.
+- Allowed params keys for settings edits: on_raw, off_raw, on_lux, off_lux, sensor_entity_id, target_entity_id, motion_entity_id, block_on_during_daytime, daytime_start_hour, daytime_end_hour, allow_daytime_turn_on_when_very_dark, daytime_on_lux, daytime_on_raw, require_motion_for_turn_on, motion_hold_seconds.
 - Keep reply concise and factual.
 
 Conversation history:
@@ -236,7 +237,16 @@ Return exactly one JSON object with this shape:
     "on_lux": 50,
     "off_lux": 35,
     "sensor_entity_id": "ent_dev_sensor_hall_01_illuminance",
-    "target_entity_id": "ent_dev_light_bench_01_relay"
+    "target_entity_id": "ent_dev_light_bench_01_relay",
+    "motion_entity_id": "ent_dev_sensor_hall_01_motion",
+    "block_on_during_daytime": true,
+    "daytime_start_hour": 7,
+    "daytime_end_hour": 18,
+    "allow_daytime_turn_on_when_very_dark": true,
+    "daytime_on_lux": 35,
+    "daytime_on_raw": 3600,
+    "require_motion_for_turn_on": true,
+    "motion_hold_seconds": 900
   }}
 }}
 """.strip()

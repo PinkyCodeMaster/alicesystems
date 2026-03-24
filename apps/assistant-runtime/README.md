@@ -27,6 +27,7 @@ Implemented now:
   - enabling/disabling auto-light through Home OS tool routes
   - auto-light threshold edits through Home OS tool routes
   - auto-light sensor and target mapping edits through Home OS tool routes
+  - auto-light daytime and motion policy edits through Home OS tool routes
   - recent audit event summaries
   - turning the relay on/off through Home OS tool routes
 - optional Ollama planner with deterministic fallback

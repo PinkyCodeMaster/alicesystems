@@ -297,6 +297,38 @@ class FakeMappingPlanner:
         return "Hello from planner chat."
 
 
+class FakePolicyPlanner:
+    async def plan(
+        self,
+        *,
+        message: str,
+        recent_messages: list[SessionMessage],
+        devices: list[Device],
+        entities: list[Entity],
+        states: list[EntityState],
+    ) -> PlannerDecision:
+        assert recent_messages
+        return PlannerDecision(
+            action="update_auto_light_policy",
+            reply="Planner updated the auto-light policy.",
+            params={
+                "require_motion_for_turn_on": True,
+                "motion_entity_id": "ent_dev_sensor_hall_01_motion",
+                "motion_hold_seconds": 600,
+            },
+        )
+
+    async def chat(
+        self,
+        *,
+        recent_messages: list[SessionMessage],
+        devices: list[Device],
+        entities: list[Entity],
+        states: list[EntityState],
+    ) -> str:
+        return "Hello from planner chat."
+
+
 class FakeDeviceDetailPlanner:
     async def plan(
         self,
@@ -470,6 +502,8 @@ def test_reports_auto_light_status(tmp_path):
     assert "Auto-light is enabled." in response.reply
     assert "raw_high_turn_on" in response.reply
     assert "Daytime block: on" in response.reply
+    assert "Very-dark daytime override: on" in response.reply
+    assert "Motion gate: off" in response.reply
 
 
 def test_can_disable_auto_light(tmp_path):
@@ -521,6 +555,39 @@ def test_can_update_auto_light_target_mapping(tmp_path):
     assert service.gateway.last_auto_light_update == {"target_entity_id": "ent_dev_light_bench_01_relay"}
 
 
+def test_can_update_auto_light_daytime_policy(tmp_path):
+    service = build_service(tmp_path)
+    response = asyncio.run(
+        _chat(
+            service,
+            "set auto-light daytime start to 8 and daytime end to 17 and daytime override lux to 25",
+        )
+    )
+    assert response.success is True
+    assert response.reply.startswith("Updated auto-light policy.")
+    assert service.gateway.last_auto_light_update == {
+        "daytime_start_hour": 8,
+        "daytime_end_hour": 17,
+        "daytime_on_lux": 25.0,
+    }
+
+
+def test_can_update_auto_light_motion_policy(tmp_path):
+    service = build_service(tmp_path)
+    response = asyncio.run(
+        _chat(
+            service,
+            "require motion for auto-light and set motion sensor to hall sensor motion and motion hold to 600",
+        )
+    )
+    assert response.success is True
+    assert service.gateway.last_auto_light_update == {
+        "require_motion_for_turn_on": True,
+        "motion_hold_seconds": 600,
+        "motion_entity_id": "ent_dev_sensor_hall_01_motion",
+    }
+
+
 def test_persists_session_history(tmp_path):
     service = build_service(tmp_path)
     first = asyncio.run(_chat(service, "what devices are online"))
@@ -538,7 +605,7 @@ def test_ollama_planner_can_choose_action(tmp_path):
     response = asyncio.run(_chat(service, "turn it off"))
     assert response.mode == "ollama"
     assert response.success is True
-    assert response.reply == "Planner chose to turn the bench light off."
+    assert response.reply.startswith("Queued turn-off command for Bench Light.")
     assert service.gateway.last_command == (
         "ent_dev_light_bench_01_relay",
         "switch.set",
@@ -551,7 +618,7 @@ def test_ollama_planner_can_update_auto_light_thresholds(tmp_path):
     response = asyncio.run(_chat(service, "make auto-light less sensitive"))
     assert response.mode == "ollama"
     assert response.success is True
-    assert response.reply == "Planner updated the auto-light thresholds."
+    assert response.reply.startswith("Updated auto-light thresholds.")
     assert service.gateway.last_auto_light_update == {"on_raw": 3300.0, "off_raw": 2800.0}
 
 
@@ -560,10 +627,23 @@ def test_ollama_planner_can_update_auto_light_mapping(tmp_path):
     response = asyncio.run(_chat(service, "use the hall sensor for auto light"))
     assert response.mode == "ollama"
     assert response.success is True
-    assert response.reply == "Planner updated the auto-light mapping."
+    assert response.reply.startswith("Updated auto-light mapping.")
     assert service.gateway.last_auto_light_update == {
         "sensor_entity_id": "ent_dev_sensor_hall_01_illuminance",
         "target_entity_id": "ent_dev_light_bench_01_relay",
+    }
+
+
+def test_ollama_planner_can_update_auto_light_policy(tmp_path):
+    service = build_service(tmp_path, assistant_mode="auto", planner=FakePolicyPlanner())
+    response = asyncio.run(_chat(service, "make auto-light require motion"))
+    assert response.mode == "ollama"
+    assert response.success is True
+    assert response.reply.startswith("Updated auto-light policy.")
+    assert service.gateway.last_auto_light_update == {
+        "require_motion_for_turn_on": True,
+        "motion_entity_id": "ent_dev_sensor_hall_01_motion",
+        "motion_hold_seconds": 600,
     }
 
 
