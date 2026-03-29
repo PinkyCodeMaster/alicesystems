@@ -1,0 +1,159 @@
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: alice-practice-mosquitto
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+    volumes:
+      - ../mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - practice_mosquitto_data:/mosquitto/data
+      - practice_mosquitto_log:/mosquitto/log
+    networks:
+      practice_net:
+        ipv4_address: 172.28.10.20
+
+  hub-api:
+    build:
+      context: ../..
+      dockerfile: infra/docker/practice/hub-api/Dockerfile
+    container_name: alice-practice-hub-api
+    restart: unless-stopped
+    depends_on:
+      - mosquitto
+    environment:
+      DATABASE_URL: sqlite:///./data/alice.db
+      LOG_DIR: /srv/alice/apps/hub-api/logs
+      MQTT_ENABLED: "true"
+      MQTT_HOST: mosquitto
+      MQTT_PORT: "1883"
+      MQTT_TOPIC_PREFIX: alice/v1
+      CORS_ALLOW_ORIGINS: "*"
+      ENABLE_DOCS: "true"
+      BOOTSTRAP_DEFAULT_ADMIN_ON_STARTUP: "false"
+      DEFAULT_ADMIN_EMAIL: admin@alice.systems
+      DEFAULT_ADMIN_PASSWORD: change-me
+      DEFAULT_ADMIN_DISPLAY_NAME: Alice Admin
+      ALICE_PRACTICE_SEED_BOOTSTRAP: "true"
+    ports:
+      - "8000:8000"
+    volumes:
+      - practice_hub_data:/srv/alice/apps/hub-api/data
+    networks:
+      practice_net:
+        ipv4_address: 172.28.10.10
+
+  assistant-runtime:
+    build:
+      context: ../..
+      dockerfile: infra/docker/practice/assistant-runtime/Dockerfile
+    container_name: alice-practice-assistant
+    restart: unless-stopped
+    depends_on:
+      - hub-api
+    environment:
+      CORS_ALLOW_ORIGINS: "*"
+      ASSISTANT_MODE: deterministic
+      ASSISTANT_ALLOW_FALLBACK: "true"
+      SESSION_STORE_FILE: /data/assistant.db
+      HOME_OS_BASE_URL: http://hub-api:8000/api/v1
+      OLLAMA_MODEL: ""
+    ports:
+      - "8010:8010"
+    volumes:
+      - practice_assistant_data:/data
+    networks:
+      practice_net:
+        ipv4_address: 172.28.10.11
+
+  web-dashboard:
+    build:
+      context: ../..
+      dockerfile: infra/docker/practice/web-dashboard/Dockerfile
+    container_name: alice-practice-dashboard
+    restart: unless-stopped
+    depends_on:
+      - hub-api
+      - assistant-runtime
+    ports:
+      - "3000:3000"
+    networks:
+      practice_net:
+        ipv4_address: 172.28.10.12
+
+  mock-sensor:
+    build:
+      context: ../..
+      dockerfile: infra/docker/practice/mock-device/Dockerfile
+    container_name: alice-practice-mock-sensor
+    restart: unless-stopped
+    depends_on:
+      - hub-api
+      - mosquitto
+    environment:
+      MOCK_DEVICE_KIND: sensor
+      MOCK_BOOTSTRAP_ID: boot_mock_sensor_01
+      MOCK_DEVICE_ID: dev_mock_sensor_01
+      MOCK_DEVICE_NAME: Practice Hall Sensor
+      MOCK_MODEL: alice.sensor.env.s1
+      MOCK_DEVICE_TYPE: sensor_node
+      MOCK_FW_VERSION: 0.2.0-practice
+      MOCK_MQTT_HOST: mosquitto
+      MOCK_MQTT_PORT: "1883"
+      MOCK_MQTT_TOPIC_PREFIX: alice/v1
+      MOCK_HUB_API_BASE_URL: http://hub-api:8000/api/v1
+      MOCK_SETUP_AP_SSID: AliceSetup-mock-sensor-01
+      MOCK_STATE_FILE: /data/mock-device-state.json
+    ports:
+      - "48081:8080"
+    volumes:
+      - practice_mock_sensor_data:/data
+    networks:
+      practice_net:
+        ipv4_address: 172.28.10.101
+
+  mock-relay:
+    build:
+      context: ../..
+      dockerfile: infra/docker/practice/mock-device/Dockerfile
+    container_name: alice-practice-mock-relay
+    restart: unless-stopped
+    depends_on:
+      - hub-api
+      - mosquitto
+    environment:
+      MOCK_DEVICE_KIND: relay
+      MOCK_BOOTSTRAP_ID: boot_mock_relay_01
+      MOCK_DEVICE_ID: dev_mock_relay_01
+      MOCK_DEVICE_NAME: Practice Bench Relay
+      MOCK_MODEL: alice.relay.r1
+      MOCK_DEVICE_TYPE: relay_node
+      MOCK_FW_VERSION: 0.2.0-practice
+      MOCK_MQTT_HOST: mosquitto
+      MOCK_MQTT_PORT: "1883"
+      MOCK_MQTT_TOPIC_PREFIX: alice/v1
+      MOCK_HUB_API_BASE_URL: http://hub-api:8000/api/v1
+      MOCK_SETUP_AP_SSID: AliceSetup-mock-relay-01
+      MOCK_STATE_FILE: /data/mock-device-state.json
+    ports:
+      - "48082:8080"
+    volumes:
+      - practice_mock_relay_data:/data
+    networks:
+      practice_net:
+        ipv4_address: 172.28.10.102
+
+networks:
+  practice_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.10.0/24
+
+volumes:
+  practice_hub_data:
+  practice_assistant_data:
+  practice_mosquitto_data:
+  practice_mosquitto_log:
+  practice_mock_sensor_data:
+  practice_mock_relay_data:

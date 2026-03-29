@@ -194,11 +194,11 @@ export function AssistantConsole({
   );
 
   const examples = [
-    "show me the bench light details",
+    "show me the living room light details",
     "what happened recently",
-    "is auto-light enabled",
-    "set auto-light on raw to 3200",
-    "set auto-light sensor to hall sensor illuminance",
+    "is the light automation enabled",
+    "set the light automation on raw to 3200",
+    "set the light automation sensor to hall sensor illuminance",
   ];
 
   return (
@@ -220,7 +220,7 @@ export function AssistantConsole({
                 Assistant console
               </CardTitle>
               <CardDescription>
-                Live session memory, tool traces, and assistant health.
+                Live assistant conversation, tool activity, and runtime health.
               </CardDescription>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -276,7 +276,7 @@ export function AssistantConsole({
                 id="assistant-prompt"
                 value={assistantInput}
                 onChange={(event) => setAssistantInput(event.target.value)}
-                placeholder="Ask Alice about device state, audit history, or automation settings."
+                placeholder="Ask Alice about this home, recent activity, or automation behavior."
                 className="min-h-27.5"
               />
               <div className="flex flex-wrap gap-2">
@@ -422,7 +422,7 @@ export function AssistantConsole({
             </div>
 
             <div className="rounded-2xl border p-4">
-              <div className="text-sm font-medium">Latest assistant debug</div>
+              <div className="text-sm font-medium">Latest response details</div>
               {assistantSubmitting || assistantResponse || lastAssistantMessage ? (
                 <div className="mt-3 space-y-3 text-xs text-muted-foreground">
                   {assistantSubmitting ? (
@@ -470,8 +470,8 @@ export function AssistantConsole({
                     </>
                   ) : (
                     <div>
-                      Session has persisted messages, but no response debug is
-                      loaded yet in this browser tab.
+                      Session messages are available, but response details have not
+                      been loaded in this browser tab yet.
                     </div>
                   )}
                 </div>

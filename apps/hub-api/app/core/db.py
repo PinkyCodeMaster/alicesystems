@@ -4,7 +4,19 @@ from pathlib import Path
 from alembic import command
 from alembic.config import Config as AlembicConfig
 from app.domain.base import Base
-from app.domain.models import AuditEvent, Device, Entity, EntityState, Room, Site, SystemSetting, User
+from app.domain.models import (
+    AuditEvent,
+    Device,
+    DeviceBootstrapRecord,
+    DeviceCredential,
+    Entity,
+    EntityState,
+    ProvisioningSession,
+    Room,
+    Site,
+    SystemSetting,
+    User,
+)
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 

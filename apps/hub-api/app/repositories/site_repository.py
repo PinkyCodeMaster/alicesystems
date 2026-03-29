@@ -16,3 +16,9 @@ class SiteRepository:
         self.db.commit()
         self.db.refresh(site)
         return site
+
+    def update(self, site: Site) -> Site:
+        self.db.add(site)
+        self.db.commit()
+        self.db.refresh(site)
+        return site

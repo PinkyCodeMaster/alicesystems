@@ -1,3 +1,7 @@
+param(
+    [switch]$Mobile
+)
+
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
@@ -5,6 +9,7 @@ $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $hubApiDir = Join-Path $repoRoot "apps\hub-api"
 $assistantDir = Join-Path $repoRoot "apps\assistant-runtime"
 $webDir = Join-Path $repoRoot "apps\web-dashboard"
+$mobileDir = Join-Path $repoRoot "apps\mobile-app"
 $infraScriptsDir = Join-Path $repoRoot "infra\scripts"
 $pythonPath = Join-Path $hubApiDir ".alice\Scripts\python.exe"
 $assistantPythonPath = Join-Path $assistantDir ".alice\Scripts\python.exe"
@@ -103,6 +108,12 @@ if (-not (Test-Path '.\node_modules')) { bun install }
 bun run dev
 "@
 
+$mobileCommand = @"
+Set-Location '$mobileDir'
+if (-not (Test-Path '.\node_modules')) { bun install }
+bun run start
+"@
+
 $assistantCommand = @"
 Set-Location '$assistantDir'
 . '$assistantActivateScript'
@@ -142,6 +153,15 @@ Start-Process powershell -ArgumentList @(
     $webCommand
 )
 
+if ($Mobile) {
+    Write-Step "Starting mobile Expo app in a new PowerShell window"
+    Start-Process powershell -ArgumentList @(
+        "-NoExit",
+        "-Command",
+        $mobileCommand
+    )
+}
+
 Write-Step "Stack started"
 Write-Host ""
 Write-Host "Open these locally:" -ForegroundColor Green
@@ -150,6 +170,9 @@ Write-Host "  API health:  $apiHealthLocalUrl"
 Write-Host "  Assistant:   $assistantDocsLocalUrl"
 Write-Host "  Assistant health: $assistantHealthLocalUrl"
 Write-Host "  Dashboard:   http://127.0.0.1:3000"
+if ($Mobile) {
+    Write-Host "  Mobile Expo: started in a separate PowerShell window"
+}
 Write-Host ""
 Write-Host "Open these from other devices on your LAN:" -ForegroundColor Green
 Write-Host "  API docs:    $apiDocsLanUrl"
@@ -157,5 +180,8 @@ Write-Host "  API health:  $apiHealthLanUrl"
 Write-Host "  Assistant:   $assistantDocsLanUrl"
 Write-Host "  Assistant health: $assistantHealthLanUrl"
 Write-Host ""
+if ($Mobile) {
+    Write-Host "For phones, enter your LAN API URL in the mobile app login form." -ForegroundColor Yellow
+}
 Write-Host "The ESP32 boards should reconnect automatically if they are already powered." -ForegroundColor Yellow
 Write-Host "Use the dashboard and assistant runtime to confirm hub health, device presence, and relay control." -ForegroundColor Yellow

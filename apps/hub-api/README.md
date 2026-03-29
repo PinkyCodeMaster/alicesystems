@@ -11,7 +11,7 @@ Implemented now:
 
 - FastAPI app with local SQLite persistence
 - Alembic migrations
-- seeded default admin bootstrap
+- first-run hub setup status and setup completion API
 - JWT-backed local login
 - `/auth/me`
 - room CRUD subset for local testing
@@ -23,6 +23,7 @@ Implemented now:
 - MQTT command acknowledgement ingest
 - persisted auto-light settings in SQLite
 - stack-health endpoint for dashboard/operator visibility
+- bootstrap record, claim session, and claim-complete provisioning APIs
 - retained MQTT rehydration when state arrives before `hello`
 - device detail API for dashboard drill-down
 - WebSocket invalidation endpoint for dashboard refresh
@@ -39,7 +40,7 @@ Implemented now:
 
 Not implemented yet:
 
-- real provisioning flow
+- mobile QR transfer and device-side provisioning runtime
 - production-safe signed OTA flow
 - automation engine
 - full voice assistant pipeline
@@ -60,14 +61,36 @@ cd E:\alicesystems\apps\hub-api
 py -3.13 -m venv .alice
 .\.alice\Scripts\Activate.ps1
 python -m pip install --upgrade pip
-pip install -r requirements.txt
 pip install -r requirements-dev.txt
 Copy-Item .env.example .env -ErrorAction SilentlyContinue
 python -m alembic upgrade head
-python -m app.scripts.seed_dev
 ```
 
 If your `.env` already exists from an older local setup, compare it with `.env.example` and add the missing `MQTT_*` variables before testing broker integration.
+
+Fresh-start product flow:
+
+1. start `hub-api`
+2. open the web dashboard
+3. complete the first-run hub setup flow
+4. sign in with the owner account you just created
+
+If you want the two current bench ESP32 bootstrap records without creating a preloaded user or demo devices, run:
+
+```powershell
+cd E:\alicesystems\apps\hub-api
+.\.alice\Scripts\Activate.ps1
+python -m app.scripts.seed_bootstrap_records
+```
+
+If you want demo data and a seeded admin for local development, run the dev seed command separately.
+
+Current provisioning backend flow:
+
+1. an authenticated owner registers a bootstrap record
+2. the owner starts a provisioning session with the printed setup code
+3. the device completes claim with the short-lived claim token
+4. Home OS returns final runtime MQTT config and marks the device `provisioned`
 
 ## Start Commands
 
@@ -227,6 +250,32 @@ The seed creates:
 - two placeholder devices
 - three placeholder entities
 - basic starter entity state
+- bootstrap record `boot_sensor_hall_01` with setup code `482913`
+- bootstrap record `boot_relay_bench_01` with setup code `918274`
+
+This is a demo/developer seed, not a product-first-run seed. It creates an admin and placeholder devices.
+
+## Bootstrap-Only Seed Command
+
+Use this when you want a true first-run owner onboarding flow with no preloaded account, but still need the two current bench devices to be claimable:
+
+```powershell
+cd E:\alicesystems\apps\hub-api
+.\.alice\Scripts\Activate.ps1
+python -m app.scripts.seed_bootstrap_records
+```
+
+This creates only:
+
+- bootstrap record `boot_sensor_hall_01` with setup code `482913`
+- bootstrap record `boot_relay_bench_01` with setup code `918274`
+
+It does not create:
+
+- admin users
+- rooms
+- demo devices
+- demo entities
 
 If you copied `.env.example` to `.env`, the seeded admin is:
 

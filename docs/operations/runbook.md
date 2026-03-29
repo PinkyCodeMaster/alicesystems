@@ -7,7 +7,6 @@ cd E:\alicesystems\apps\hub-api
 py -3.13 -m venv .alice
 .\.alice\Scripts\Activate.ps1
 python -m pip install --upgrade pip
-pip install -r requirements.txt
 pip install -r requirements-dev.txt
 Copy-Item .env.example .env -ErrorAction SilentlyContinue
 python -m alembic upgrade head
@@ -19,15 +18,14 @@ python -m uvicorn app.main:app --reload
 
 ```powershell
 cd E:\alicesystems
-.\tools\dev\start-local-stack.ps1
+.\tools\dev\start-local-backend.ps1
 ```
 
-This starts the current local Alice stack:
+This starts the current local Alice backend:
 
 - Docker Mosquitto
 - `hub-api`
 - `assistant-runtime`
-- `web-dashboard`
 
 The ESP32 boards should reconnect automatically. Manual reset is only for debugging or forcing a fresh `hello`.
 
@@ -85,8 +83,8 @@ cd E:\alicesystems\infra\scripts
 
 ```powershell
 cd E:\alicesystems
-.\tools\dev\start-local-stack.ps1
-.\tools\dev\stop-local-stack.ps1
+.\tools\dev\start-local-backend.ps1
+.\tools\dev\stop-local-backend.ps1
 ```
 
 ## Local URLs
@@ -115,7 +113,7 @@ cd E:\alicesystems
 - `mosquitto`: runnable now through Docker Compose
 - `assistant-runtime`: runnable now
 - `web-dashboard`: runnable now
-- `mobile-app`: not implemented yet
+- `mobile-app`: runnable separately
 - worker: not implemented yet
 
 ## Current Seeded Login

@@ -10,10 +10,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
 const navItems = [
-  { href: "/", label: "Overview" },
+  { href: "/", label: "Home" },
   { href: "/assistant", label: "Assistant" },
   { href: "/devices", label: "Devices" },
-  { href: "/automations/auto-light", label: "Auto-light" },
+  { href: "/automations/auto-light", label: "Automation" },
   { href: "/audit", label: "Audit" },
 ];
 
@@ -39,7 +39,7 @@ export function AppShell({
           <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
             <div className="space-y-3">
               <Badge variant="secondary" className="rounded-full px-3 py-1">
-                Alice Dashboard
+                Alice Web
               </Badge>
               <div>
                 <h1 className="text-3xl font-semibold tracking-tight">{title}</h1>

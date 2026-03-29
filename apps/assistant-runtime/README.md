@@ -46,12 +46,13 @@ cd E:\alicesystems\apps\assistant-runtime
 py -3.13 -m venv .alice
 .\.alice\Scripts\Activate.ps1
 python -m pip install --upgrade pip
-pip install -r requirements.txt
 pip install -r requirements-dev.txt
 Copy-Item .env.example .env -ErrorAction SilentlyContinue
 ```
 
-If you leave `HOME_OS_EMAIL` and `HOME_OS_PASSWORD` blank, the runtime will fall back to the `DEFAULT_ADMIN_*` values in [hub-api/.env](e:/alicesystems/apps/hub-api/.env).
+The runtime now authenticates to Home OS with `HOME_OS_SERVICE_ID` and `HOME_OS_SERVICE_SECRET`. If you leave the secret blank, it will fall back to `ASSISTANT_SERVICE_SECRET` from [hub-api/.env](e:/alicesystems/apps/hub-api/.env).
+
+`HOME_OS_TIMEOUT_SECONDS` controls how long the assistant waits for hub responses before surfacing a local runtime error.
 
 If you want the assistant to use a local model first, set:
 
@@ -95,7 +96,7 @@ Or start the full local Alice stack from the repo root:
 
 ```powershell
 cd E:\alicesystems
-.\tools\dev\start-local-stack.ps1
+.\tools\dev\start-local-backend.ps1
 ```
 
 ## Local URLs

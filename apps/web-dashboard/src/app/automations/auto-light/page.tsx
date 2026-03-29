@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/card";
 import {
   apiFetch,
+  authenticateDashboardWebSocket,
   AuditEvent,
   AutoLightSettings,
   buildDashboardWebSocketUrl,
@@ -90,7 +91,8 @@ export default function AutoLightPage() {
       return;
     }
 
-    const websocket = new WebSocket(buildDashboardWebSocketUrl(apiBaseUrl, token));
+    const websocket = new WebSocket(buildDashboardWebSocketUrl(apiBaseUrl));
+    websocket.onopen = () => authenticateDashboardWebSocket(websocket, token);
     websocket.onmessage = (event) => {
       try {
         const payload = JSON.parse(event.data) as { type?: string };
@@ -137,7 +139,7 @@ export default function AutoLightPage() {
   }
 
   if (!token) {
-    return <AuthRequiredCard description="Return to the dashboard and sign in before opening automations." />;
+    return <AuthRequiredCard description="Return to Alice Web and sign in before opening automations." />;
   }
 
   return (

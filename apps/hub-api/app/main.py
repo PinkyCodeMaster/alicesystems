@@ -40,6 +40,8 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or get_settings()
+    close_engine()
+    close_logging()
     set_settings_override(settings)
     configure_logging(settings)
 
@@ -154,9 +156,24 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.websocket(f"{settings.api_v1_prefix}/ws/dashboard")
     async def dashboard_events(websocket: WebSocket) -> None:
-        token = websocket.query_params.get("token")
+        await websocket.accept()
+
+        try:
+            auth_message = await asyncio.wait_for(websocket.receive_json(), timeout=5)
+        except TimeoutError:
+            await websocket.close(code=4401, reason="Dashboard authentication timed out")
+            return
+        except Exception:
+            await websocket.close(code=4401, reason="Invalid dashboard authentication payload")
+            return
+
+        if auth_message.get("type") != "authenticate" or not isinstance(auth_message.get("token"), str):
+            await websocket.close(code=4401, reason="Missing dashboard token")
+            return
+
+        token = auth_message["token"].strip()
         if not token:
-            await websocket.close(code=4401, reason="Missing token")
+            await websocket.close(code=4401, reason="Missing dashboard token")
             return
 
         session = get_session_factory()()
@@ -169,7 +186,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             await websocket.close(code=4401, reason="Invalid token")
             return
 
-        await websocket.accept()
         await websocket.send_json({"type": "connected", "user_id": user.id})
         queue = event_bus.connect()
         try:

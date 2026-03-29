@@ -1,6 +1,6 @@
 import json
 
-from app.api.deps import get_current_user, get_db
+from app.api.deps import AuthenticatedActor, get_current_actor, get_current_user, get_db
 from app.domain.user import User
 from app.schemas.entities import (
     EntityCommandRequest,
@@ -92,14 +92,15 @@ def post_entity_command(
     entity_id: str,
     payload: EntityCommandRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_actor: AuthenticatedActor = Depends(get_current_actor),
 ) -> EntityCommandResponse:
     try:
         result = CommandService(db).execute_entity_command(
             entity_id=entity_id,
             command=payload.command,
             params=payload.params,
-            actor_id=current_user.id,
+            actor_id=current_actor.id,
+            actor_type=current_actor.actor_type,
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc

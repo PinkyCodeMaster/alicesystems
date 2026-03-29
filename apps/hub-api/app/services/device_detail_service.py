@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 
+from app.repositories.room_repository import RoomRepository
 from app.repositories.entity_repository import EntityRepository
 from app.repositories.entity_state_repository import EntityStateRepository
 from app.schemas.audit import AuditEventListItem
@@ -17,12 +18,14 @@ class DeviceDetailService:
         self.device_registry = DeviceRegistryService(db)
         self.entity_repo = EntityRepository(db)
         self.state_repo = EntityStateRepository(db)
+        self.room_repo = RoomRepository(db)
         self.audit_service = AuditService(db)
 
     def get(self, *, device_id: str) -> DeviceDetailResponse | None:
         device = self.device_registry.get_device(device_id)
         if device is None:
             return None
+        room = self.room_repo.get_by_id(device.room_id) if device.room_id else None
 
         entities = self.entity_repo.list_by_device(device_id)
         states = {
@@ -50,10 +53,25 @@ class DeviceDetailService:
                 break
 
         return DeviceDetailResponse(
-            device=DeviceListItem.model_validate(device),
+            device=DeviceListItem(
+                id=device.id,
+                site_id=device.site_id,
+                room_id=device.room_id,
+                room_name=room.name if room is not None else None,
+                name=device.name,
+                model=device.model,
+                device_type=device.device_type,
+                protocol=device.protocol,
+                status=device.status,
+                provisioning_status=device.provisioning_status,
+                fw_version=device.fw_version,
+                mqtt_client_id=device.mqtt_client_id,
+                last_seen_at=device.last_seen_at,
+            ),
             entities=[
                 DeviceDetailEntityItem(
                     id=entity.id,
+                    room_id=entity.room_id,
                     capability_id=entity.capability_id,
                     kind=entity.kind,
                     name=entity.name,

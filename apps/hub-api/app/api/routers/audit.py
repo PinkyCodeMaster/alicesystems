@@ -1,4 +1,4 @@
-from app.api.deps import get_current_user, get_db
+from app.api.deps import get_current_actor, get_db
 from app.schemas.audit import AuditEventListItem, AuditEventListResponse
 from app.services.audit_service import AuditService
 from fastapi import APIRouter, Depends
@@ -11,7 +11,7 @@ router = APIRouter()
 def list_audit_events(
     limit: int = 50,
     db: Session = Depends(get_db),
-    _current_user=Depends(get_current_user),
+    _current_actor=Depends(get_current_actor),
 ) -> AuditEventListResponse:
     service = AuditService(db)
     items = [AuditEventListItem.model_validate(event) for event in service.list_recent(limit=limit)]

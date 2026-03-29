@@ -1,6 +1,10 @@
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr, Field
+
+
+class RoomTemplateItem(BaseModel):
+    name: str = Field(min_length=2, max_length=255)
 
 
 class HealthResponse(BaseModel):
@@ -14,6 +18,40 @@ class RootResponse(BaseModel):
     version: str
     site_id: str
     site_name: str
+    setup_completed: bool
+    requires_onboarding: bool
+
+
+class HubSetupStatusResponse(BaseModel):
+    setup_completed: bool
+    requires_onboarding: bool
+    site_id: str
+    site_name: str
+    timezone: str
+    owner_count: int
+    completed_at: datetime | None
+    source: str
+
+
+class HubSetupRequest(BaseModel):
+    site_name: str = Field(min_length=2, max_length=255)
+    timezone: str = Field(min_length=3, max_length=64)
+    owner_email: EmailStr
+    owner_display_name: str = Field(min_length=2, max_length=255)
+    password: str = Field(min_length=8, max_length=255)
+    room_names: list[str] | None = None
+
+
+class HubSetupResponse(BaseModel):
+    access_token: str
+    token_type: str
+    user_id: str
+    display_name: str
+    setup_completed: bool
+    site_id: str
+    site_name: str
+    timezone: str
+    rooms: list[RoomTemplateItem]
 
 
 class AutoLightSettingsResponse(BaseModel):

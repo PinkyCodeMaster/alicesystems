@@ -19,6 +19,23 @@ Working locally today:
 - [assistant-runtime](e:/alicesystems/apps/assistant-runtime/README.md): local assistant runtime with session history, deterministic tool routing, and Ollama planning with fallback
 - [operations docs](e:/alicesystems/docs/operations/README.md): Windows-first local start/stop, MQTT, OTA, and end-of-day status
 
+## Run Alice Locally
+
+For real product work, the local backend path is:
+
+```powershell
+cd E:\alicesystems
+.\tools\dev\start-local-backend.ps1
+```
+
+That starts the native Alice backend in one console with visible logs:
+
+- `hub-api`
+- `assistant-runtime`
+- local Mosquitto
+
+Use `.\tools\dev\start-local-stack.ps1` only when you explicitly also want the web UI or mobile client launched for UI work. The Docker practice stack is a separate rehearsal environment, not the default local product runtime.
+
 End-of-day project status for March 23, 2026:
 
 - [2026-03-23-status.md](e:/alicesystems/docs/operations/2026-03-23-status.md)

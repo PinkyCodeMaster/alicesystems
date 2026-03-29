@@ -18,6 +18,7 @@ export function DevicesTable({ devices }: { devices: Device[] }) {
         <TableHeader>
           <TableRow>
             <TableHead>Name</TableHead>
+            <TableHead>Room</TableHead>
             <TableHead>Type</TableHead>
             <TableHead>Status</TableHead>
             <TableHead>Last seen</TableHead>
@@ -37,6 +38,7 @@ export function DevicesTable({ devices }: { devices: Device[] }) {
                   {device.id} | {device.model} | fw {device.fw_version ?? "unknown"}
                 </div>
               </TableCell>
+              <TableCell>{device.room_name ?? "Not placed yet"}</TableCell>
               <TableCell>{device.device_type}</TableCell>
               <TableCell>
                 <Badge variant={getStatusVariant(device.status)}>{device.status}</Badge>
@@ -46,7 +48,7 @@ export function DevicesTable({ devices }: { devices: Device[] }) {
           ))}
           {devices.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={4} className="text-center text-muted-foreground">
+              <TableCell colSpan={5} className="text-center text-muted-foreground">
                 No devices found.
               </TableCell>
             </TableRow>

@@ -11,6 +11,7 @@ class DeviceListItem(BaseModel):
     id: str
     site_id: str
     room_id: str | None
+    room_name: str | None = None
     name: str
     model: str
     device_type: str
@@ -28,6 +29,7 @@ class DeviceListResponse(BaseModel):
 
 class DeviceDetailEntityItem(BaseModel):
     id: str
+    room_id: str | None
     capability_id: str
     kind: str
     name: str
@@ -43,3 +45,13 @@ class DeviceDetailResponse(BaseModel):
     device: DeviceListItem
     entities: list[DeviceDetailEntityItem]
     audit_events: list[AuditEventListItem]
+
+
+class DeviceUpdateRequest(BaseModel):
+    name: str
+    room_id: str | None = None
+
+
+class DeviceDeleteResponse(BaseModel):
+    device_id: str
+    removed: bool

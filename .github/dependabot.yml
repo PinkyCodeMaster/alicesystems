@@ -1,0 +1,25 @@
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: /apps/hub-api
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: pip
+    directory: /apps/assistant-runtime
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: npm
+    directory: /apps/mobile-app
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: npm
+    directory: /apps/web-dashboard
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5

@@ -1,0 +1,16 @@
+[versions]
+agp = "9.1.0"
+coreKtx = "1.10.1"
+leanback = "1.2.0"
+glide = "4.16.0"
+vectorDrawable = "1.2.0"
+
+[libraries]
+androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
+androidx-leanback = { group = "androidx.leanback", name = "leanback", version.ref = "leanback" }
+androidx-vectordrawable = { group = "androidx.vectordrawable", name = "vectordrawable", version.ref = "vectorDrawable" }
+androidx-vectordrawable-animated = { group = "androidx.vectordrawable", name = "vectordrawable-animated", version.ref = "vectorDrawable" }
+glide = { group = "com.github.bumptech.glide", name = "glide", version.ref = "glide" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }

@@ -53,6 +53,10 @@ class Settings(BaseSettings):
     auto_light_motion_hold_seconds: int = 900
     auto_light_actor_id: str = "system:auto-light"
     device_offline_timeout_seconds: int = 45
+    provisioning_session_expiry_minutes: int = 10
+    assistant_service_id: str = "assistant-runtime"
+    assistant_service_secret: str = "dev-only-assistant-service-secret-change-me"
+    bootstrap_default_admin_on_startup: bool = False
     default_admin_email: str = "scottjones@wolfpackdefence.co.uk"
     default_admin_password: str = "Alltheballs!2"
     default_admin_display_name: str = "Scott Jones"

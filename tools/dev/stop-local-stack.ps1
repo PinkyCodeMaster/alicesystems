@@ -12,7 +12,8 @@ Get-CimInstance Win32_Process |
     Where-Object {
         ($_.Name -match "^python(\.exe)?$" -and $_.CommandLine -match "uvicorn app\.main:app") -or
         ($_.Name -match "^python(\.exe)?$" -and $_.CommandLine -match "uvicorn assistant_runtime\.main:app") -or
-        ($_.Name -match "^node(\.exe)?$" -and $_.CommandLine -match "next dev")
+        ($_.Name -match "^node(\.exe)?$" -and $_.CommandLine -match "next dev") -or
+        ($_.Name -match "^node(\.exe)?$" -and $_.CommandLine -match "expo start")
     } |
     ForEach-Object {
         try {

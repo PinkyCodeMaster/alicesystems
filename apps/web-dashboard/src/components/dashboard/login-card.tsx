@@ -53,15 +53,15 @@ export function LoginCard({
           <CardHeader className="space-y-3">
             <div className="flex items-center justify-between">
               <Badge variant="secondary" className="rounded-full px-3 py-1">
-                Alice Home OS
+                Alice Web
               </Badge>
               <ModeToggle />
             </div>
             <div>
-              <CardTitle className="text-2xl">Local dashboard login</CardTitle>
+              <CardTitle className="text-2xl">Sign in to this home</CardTitle>
               <CardDescription className="pt-1">
-                Sign in with your local admin account to inspect devices, states,
-                automations, audit, and assistant memory.
+                Use the local account created on this hub. Alice Web is the advanced surface for
+                devices, automations, audit, and assistant review.
               </CardDescription>
               <div className="space-y-2 pt-3 text-xs text-muted-foreground">
                 <div>Hub target: {apiBaseUrl}</div>
@@ -97,7 +97,7 @@ export function LoginCard({
                   autoComplete="email"
                   value={loginEmail}
                   onChange={(event) => onEmailChange(event.target.value)}
-                  placeholder="admin@alice.systems"
+                  placeholder="you@home.local"
                 />
               </div>
 
@@ -109,7 +109,7 @@ export function LoginCard({
                   autoComplete="current-password"
                   value={loginPassword}
                   onChange={(event) => onPasswordChange(event.target.value)}
-                  placeholder="password"
+                  placeholder="Your password"
                 />
               </div>
 

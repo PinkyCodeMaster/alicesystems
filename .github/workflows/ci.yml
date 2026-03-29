@@ -1,0 +1,95 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  hub-api:
+    name: hub-api tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/hub-api
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dev.txt
+
+      - name: Run tests
+        run: python -m pytest -q
+
+  assistant-runtime:
+    name: assistant-runtime tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/assistant-runtime
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dev.txt
+
+      - name: Run tests
+        run: python -m pytest -q
+
+  mobile-app:
+    name: mobile-app lint
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/mobile-app
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Lint
+        run: bun run lint
+
+  web-dashboard:
+    name: web-dashboard lint and build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web-dashboard
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Lint
+        run: bun run lint
+
+      - name: Build
+        run: bun run build

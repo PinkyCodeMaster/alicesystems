@@ -1,7 +1,7 @@
 # web-dashboard
 
-- Purpose: Browser-based control and visibility surface for Alice Home OS during local development and early in-house testing.
-- Responsibilities: Log into the hub, inspect devices and entities, review audit history, edit auto-light behavior, and use the browser assistant interface.
+- Purpose: Browser-based advanced administration surface for Alice Home OS.
+- Responsibilities: Sign into the local hub, review devices and entity state, inspect audit history, adjust advanced automation settings, and use the browser assistant interface.
 - Interfaces: Reads and writes against `hub-api` over REST at `/api/v1` and talks to `assistant-runtime` over REST at `/api/v1`.
 - Status: in progress.
 
@@ -19,7 +19,7 @@ Open:
 
 ## Targets
 
-By default, the dashboard derives its API and assistant targets from the current browser host:
+By default, Alice Web derives its API and assistant targets from the current browser host:
 
 - `hub-api` on port `8000`
 - `assistant-runtime` on port `8010`
@@ -45,10 +45,11 @@ Restart `bun run dev` after changing `.env.local`.
 Implemented now:
 
 - `/`
-  - login
+  - first-run home setup when the hub is unclaimed
+  - login when setup is already complete
   - hub and assistant reachability
   - stack health
-  - overview cards and quick links
+  - home summary and quick links
 - `/assistant`
   - browser assistant console
   - streaming assistant replies
@@ -79,5 +80,5 @@ Shared behaviors:
 
 - current live refresh uses WebSocket invalidation plus polling fallback, not full state streaming
 - no browser voice input or output yet
-- no onboarding or provisioning flow yet
+- mobile remains the primary device-adoption surface
 - mobile app code is still separate future work

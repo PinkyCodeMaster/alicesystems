@@ -1,4 +1,4 @@
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.domain.user import User
@@ -33,3 +33,7 @@ class UserRepository:
         self.db.commit()
         self.db.refresh(user)
         return user
+
+    def count_all(self) -> int:
+        stmt = select(func.count()).select_from(User)
+        return int(self.db.scalar(stmt) or 0)

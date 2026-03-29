@@ -9,6 +9,7 @@ from app.core.db import close_engine, get_session_factory, init_db
 from app.domain.device import Device
 from app.domain.entity import Entity
 from app.services.entity_state_service import EntityStateService
+from app.services.provisioning_service import ProvisioningService
 from app.services.room_service import RoomService
 from app.services.site_service import SiteService
 from app.services.user_service import UserService
@@ -203,12 +204,46 @@ def main() -> None:
                 actor_id=admin.id,
             )
 
+        provisioning_service = ProvisioningService(session)
+        for bootstrap in (
+            {
+                "bootstrap_id": "boot_sensor_hall_01",
+                "model": "alice.sensor.env.s1",
+                "device_type": "sensor_node",
+                "setup_code": "482913",
+                "default_device_id": "dev_sensor_hall_01",
+                "metadata": {"seeded_by": "seed_dev", "hardware": "bench-sensor"},
+            },
+            {
+                "bootstrap_id": "boot_relay_bench_01",
+                "model": "alice.relay.r1",
+                "device_type": "relay_node",
+                "setup_code": "918274",
+                "default_device_id": "dev_light_bench_01",
+                "metadata": {"seeded_by": "seed_dev", "hardware": "bench-relay"},
+            },
+        ):
+            try:
+                provisioning_service.create_bootstrap_record(
+                    bootstrap_id=bootstrap["bootstrap_id"],
+                    model=bootstrap["model"],
+                    device_type=bootstrap["device_type"],
+                    setup_code=bootstrap["setup_code"],
+                    hardware_revision=None,
+                    default_device_id=bootstrap["default_device_id"],
+                    metadata=bootstrap["metadata"],
+                    actor=admin,
+                )
+            except ValueError:
+                pass
+
         print("Seed complete.")
         print(f"Site: {site.id} ({site.name})")
         print(f"Admin: {admin.email}")
         print(f"Rooms: {office.name}, {living_room.name}")
         print("Devices: dev_seed_sensor_01, dev_seed_light_01")
         print("Entities: ent_seed_temp_01, ent_seed_motion_01, ent_seed_light_01")
+        print("Bootstrap records: boot_sensor_hall_01 (482913), boot_relay_bench_01 (918274)")
     finally:
         session.close()
         close_engine()

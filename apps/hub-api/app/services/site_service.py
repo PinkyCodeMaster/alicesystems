@@ -27,3 +27,10 @@ class SiteService:
             updated_at=now,
         )
         return self.repo.create(site)
+
+    def update_site(self, *, name: str, timezone: str) -> Site:
+        site = self.get_or_create_default_site()
+        site.name = name
+        site.timezone = timezone
+        site.updated_at = datetime.now(UTC).replace(tzinfo=None)
+        return self.repo.update(site)

@@ -11,7 +11,7 @@ import {
 
 export function AuthRequiredCard({
   title = "Login required",
-  description = "Return to the dashboard and sign in before opening this page.",
+  description = "Return to Alice Web and sign in before opening this page.",
 }: {
   title?: string;
   description?: string;
@@ -26,7 +26,7 @@ export function AuthRequiredCard({
           </CardHeader>
           <CardContent>
             <Link className="inline-flex" href="/">
-              <Button type="button">Back to dashboard</Button>
+              <Button type="button">Back to Alice Web</Button>
             </Link>
           </CardContent>
         </Card>

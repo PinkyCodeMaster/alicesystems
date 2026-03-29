@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/card";
 import {
   apiFetch,
+  authenticateDashboardWebSocket,
   AuditEvent,
   buildDashboardWebSocketUrl,
   formatUserSubtitle,
@@ -67,7 +68,8 @@ export default function AuditPage() {
       return;
     }
 
-    const websocket = new WebSocket(buildDashboardWebSocketUrl(apiBaseUrl, token));
+    const websocket = new WebSocket(buildDashboardWebSocketUrl(apiBaseUrl));
+    websocket.onopen = () => authenticateDashboardWebSocket(websocket, token);
     websocket.onmessage = (event) => {
       try {
         const payload = JSON.parse(event.data) as { type?: string };
@@ -87,7 +89,7 @@ export default function AuditPage() {
   }
 
   if (!token) {
-    return <AuthRequiredCard description="Return to the dashboard and sign in before opening audit." />;
+    return <AuthRequiredCard description="Return to Alice Web and sign in before opening audit." />;
   }
 
   return (

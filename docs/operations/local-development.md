@@ -15,6 +15,7 @@ Runs locally today:
 - local seed data
 - optional Mosquitto broker via Docker Compose
 - `web-dashboard`
+- `mobile-app` Expo client
 
 Implemented and locally testable in code now:
 
@@ -31,7 +32,6 @@ Implemented and locally testable in code now:
 
 Not runnable yet:
 
-- `mobile-app`
 - live provisioning flow
 
 Prototype firmware now exists for:
@@ -53,7 +53,6 @@ cd E:\alicesystems\apps\hub-api
 py -3.13 -m venv .alice
 .\.alice\Scripts\Activate.ps1
 python -m pip install --upgrade pip
-pip install -r requirements.txt
 pip install -r requirements-dev.txt
 Copy-Item .env.example .env -ErrorAction SilentlyContinue
 python -m alembic upgrade head
@@ -63,6 +62,33 @@ python -m app.scripts.seed_dev
 If `.env` already exists from an older setup, compare it with `.env.example` and add the missing `MQTT_*` keys.
 
 ## Start Commands
+
+### Preferred Local Backend
+
+Use this from the repo root for normal Alice product work:
+
+```powershell
+cd E:\alicesystems
+.\tools\dev\start-local-backend.ps1
+```
+
+This is the source-of-truth local backend path. It:
+
+- stops conflicting Docker practice containers
+- runs hub migrations
+- starts native Mosquitto
+- starts `hub-api`
+- starts `assistant-runtime`
+- keeps backend logs visible in one console
+
+Stop it with:
+
+```powershell
+cd E:\alicesystems
+.\tools\dev\stop-local-backend.ps1
+```
+
+Use the commands below only when you need to run individual pieces manually or you explicitly want the full local stack opened for UI work.
 
 ### Backend API
 
@@ -113,7 +139,67 @@ This does all of the following:
 - launches `assistant-runtime` in a new PowerShell window
 - launches `web-dashboard` in a new PowerShell window
 
+This is optional convenience for UI work. It is not the primary backend runtime path.
+
 After that, the ESP32 boards should reconnect automatically. Use `EN/RST` only if you are bench-debugging a board that has stopped publishing.
+
+To include the mobile Expo app too:
+
+```powershell
+cd E:\alicesystems
+.\tools\dev\start-local-stack.ps1 -Mobile
+```
+
+That also launches `apps/mobile-app` in a new PowerShell window with `bun run start`.
+
+### Start The Practice Appliance Stack
+
+Use this when you want a rehearsal environment that behaves like a self-contained Alice appliance with two simulated claimable devices:
+
+```powershell
+cd E:\alicesystems\infra\scripts
+.\practice-up.ps1
+```
+
+This starts:
+
+- Docker Mosquitto
+- containerized `hub-api`
+- containerized `assistant-runtime`
+- containerized `web-dashboard`
+- one mock sensor device with a local setup endpoint
+- one mock relay device with a local setup endpoint
+
+Published ports on the host machine:
+
+- dashboard: `http://<host-ip>:3000`
+- hub API: `http://<host-ip>:8000`
+- assistant: `http://<host-ip>:8010`
+- mock sensor setup endpoint: `http://<host-ip>:48081`
+- mock relay setup endpoint: `http://<host-ip>:48082`
+
+Practice bootstrap records seeded automatically in the hub:
+
+- `boot_mock_sensor_01` with setup code `482913`
+- `boot_mock_relay_01` with setup code `918274`
+
+Recommended rehearsal flow:
+
+1. open the dashboard on `http://<host-ip>:3000`
+2. complete first-run hub setup
+3. point the mobile app at `http://<host-ip>:8000/api/v1`
+4. start a claim session for one of the practice bootstrap IDs
+5. use manual device handoff to:
+   - `http://<host-ip>:48081` for the mock sensor
+   - `http://<host-ip>:48082` for the mock relay
+6. verify both devices appear in the dashboard and the relay responds to commands
+
+Stop the practice stack with:
+
+```powershell
+cd E:\alicesystems\infra\scripts
+.\practice-down.ps1
+```
 
 ### Local MQTT Broker
 
@@ -210,11 +296,12 @@ cd E:\alicesystems\apps\assistant-runtime
 py -3.13 -m venv .alice
 .\.alice\Scripts\Activate.ps1
 python -m pip install --upgrade pip
-pip install -r requirements.txt
 pip install -r requirements-dev.txt
 Copy-Item .env.example .env -ErrorAction SilentlyContinue
 python -m uvicorn assistant_runtime.main:app --host 0.0.0.0 --port 8010
 ```
+
+`assistant-runtime` now authenticates to `hub-api` with `HOME_OS_SERVICE_ID` and `HOME_OS_SERVICE_SECRET`. If the secret is blank in `apps\assistant-runtime\.env`, it will reuse `ASSISTANT_SERVICE_SECRET` from `apps\hub-api\.env`.
 
 Helper script:
 
@@ -233,7 +320,18 @@ OLLAMA_MODEL=qwen3:4b
 
 ### Mobile App
 
-Not implemented yet. No runnable command exists.
+```powershell
+cd E:\alicesystems\apps\mobile-app
+bun install
+bun run start
+```
+
+Or from the repo root:
+
+```powershell
+cd E:\alicesystems
+.\tools\dev\start-local-stack.ps1 -Mobile
+```
 
 ### Worker
 

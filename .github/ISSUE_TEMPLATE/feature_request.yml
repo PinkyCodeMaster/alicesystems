@@ -1,0 +1,30 @@
+name: Feature request
+description: Propose a product or platform improvement grounded in the real Alice runtime.
+title: "[Feature]: "
+labels:
+  - enhancement
+  - triage
+body:
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired outcome
+      description: Describe the user-facing outcome, not just the implementation idea.
+    validations:
+      required: true
+
+  - type: textarea
+    id: current_gap
+    attributes:
+      label: Current gap
+      description: Explain where the current runtime or UX falls short today.
+    validations:
+      required: true
+
+  - type: textarea
+    id: implementation
+    attributes:
+      label: Implementation notes
+      description: Optional notes about APIs, firmware flows, migration impact, or constraints.
+    validations:
+      required: false

@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import json
+import logging
 from datetime import UTC, datetime, timedelta
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy.orm import Session
 
@@ -11,6 +12,8 @@ from app.repositories.entity_repository import EntityRepository
 from app.repositories.entity_state_repository import EntityStateRepository
 from app.services.auto_light_settings_service import AutoLightSettingsService
 from app.services.command_service import CommandService
+
+logger = logging.getLogger(__name__)
 
 
 class AutomationService:
@@ -217,4 +220,16 @@ class AutomationService:
 
     def _current_local_hour(self) -> int:
         settings = get_settings()
-        return datetime.now(ZoneInfo(settings.timezone)).hour
+        try:
+            return datetime.now(ZoneInfo(settings.timezone)).hour
+        except ZoneInfoNotFoundError:
+            logger.warning(
+                "Timezone data unavailable, falling back to UTC for auto-light evaluation",
+                extra={
+                    "event": {
+                        "action": "automation.timezone_fallback",
+                        "error": f"ZoneInfo not found for {settings.timezone}",
+                    }
+                },
+            )
+            return datetime.now(UTC).hour

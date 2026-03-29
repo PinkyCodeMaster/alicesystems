@@ -96,7 +96,7 @@ export default function AssistantPage() {
 
   if (!token) {
     return (
-      <AuthRequiredCard description="Return to the dashboard and sign in before opening the assistant console." />
+      <AuthRequiredCard description="Return to Alice Web and sign in before opening the assistant console." />
     );
   }
 

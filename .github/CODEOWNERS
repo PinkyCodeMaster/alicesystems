@@ -1,0 +1,13 @@
+# Default owner
+* @PinkyCodeMaster
+
+# Core local runtime
+/apps/hub-api/ @PinkyCodeMaster
+/apps/assistant-runtime/ @PinkyCodeMaster
+/apps/web-dashboard/ @PinkyCodeMaster
+/apps/mobile-app/ @PinkyCodeMaster
+
+# Device and provisioning surface
+/firmware/ @PinkyCodeMaster
+/hardware/ @PinkyCodeMaster
+/tools/dev/ @PinkyCodeMaster

@@ -11,6 +11,10 @@ class RoomRepository:
     def list_all(self) -> list[Room]:
         return list(self.db.scalars(select(Room).order_by(Room.name)))
 
+    def get_by_id(self, room_id: str) -> Room | None:
+        stmt = select(Room).where(Room.id == room_id)
+        return self.db.scalar(stmt)
+
     def create(self, room: Room) -> Room:
         self.db.add(room)
         self.db.commit()

@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/card";
 import {
   apiFetch,
+  authenticateDashboardWebSocket,
   buildDashboardWebSocketUrl,
   Device,
   Entity,
@@ -83,7 +84,8 @@ export default function DevicesPage() {
       return;
     }
 
-    const websocket = new WebSocket(buildDashboardWebSocketUrl(apiBaseUrl, token));
+    const websocket = new WebSocket(buildDashboardWebSocketUrl(apiBaseUrl));
+    websocket.onopen = () => authenticateDashboardWebSocket(websocket, token);
     websocket.onmessage = (event) => {
       try {
         const payload = JSON.parse(event.data) as { type?: string };
@@ -126,7 +128,7 @@ export default function DevicesPage() {
   }
 
   if (!token) {
-    return <AuthRequiredCard description="Return to the dashboard and sign in before opening devices." />;
+    return <AuthRequiredCard description="Return to Alice Web and sign in before opening devices." />;
   }
 
   return (
@@ -148,7 +150,7 @@ export default function DevicesPage() {
           <CardHeader>
             <CardTitle>Device list</CardTitle>
             <CardDescription>
-              Heartbeat status, firmware, and last-seen details for current boards.
+              Devices already joined to this home, with placement and current health.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -159,11 +161,13 @@ export default function DevicesPage() {
         <Card className="rounded-3xl">
           <CardHeader>
             <CardTitle>Summary</CardTitle>
-            <CardDescription>Current device and entity counts.</CardDescription>
+            <CardDescription>Current household inventory and placement.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3 text-sm text-muted-foreground">
             <div>devices: {devices.length}</div>
             <div>online: {devices.filter((device) => device.status === "online").length}</div>
+            <div>placed: {devices.filter((device) => device.room_id).length}</div>
+            <div>unplaced: {devices.filter((device) => !device.room_id).length}</div>
             <div>entities: {entities.length}</div>
             <div>
               writable: {entities.filter((entity) => entity.writable === 1).length}

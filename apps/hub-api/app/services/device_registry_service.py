@@ -116,13 +116,16 @@ class DeviceRegistryService:
                 updated_at=now,
             )
         else:
-            device.room_id = payload.get("room_id", device.room_id)
-            device.name = payload.get("name") or device.name
+            is_provisioned = device.provisioning_status in {"provisioned", "claimed"}
+            if not is_provisioned:
+                device.room_id = payload.get("room_id", device.room_id)
+                device.name = payload.get("name") or device.name
             device.model = payload.get("model") or device.model
             device.device_type = payload.get("device_type") or device.device_type
             device.protocol = payload.get("protocol") or device.protocol
             device.status = "online"
-            device.provisioning_status = "mqtt_discovered"
+            if not is_provisioned:
+                device.provisioning_status = "mqtt_discovered"
             device.fw_version = payload.get("fw_version") or device.fw_version
             device.mqtt_client_id = payload.get("mqtt_client_id") or device.mqtt_client_id
             device.capability_descriptor_json = json.dumps(payload.get("capabilities", []), sort_keys=True)

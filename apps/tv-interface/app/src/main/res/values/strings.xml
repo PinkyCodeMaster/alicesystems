@@ -1,0 +1,19 @@
+<resources>
+    <string name="app_name">Alice Systems</string>
+    <string name="browse_title">Alice Home OS</string>
+    <string name="related_movies">Device Controls</string>
+    <string name="grid_view">System Status</string>
+    <string name="error_fragment">Diagnostic Log</string>
+    <string name="personal_settings">Alice Settings</string>
+    <string name="watch_trailer_1">Activate</string>
+    <string name="watch_trailer_2">LOCAL</string>
+    <string name="rent_1">Security</string>
+    <string name="rent_2">Armed</string>
+    <string name="buy_1">Privacy</string>
+    <string name="buy_2">Encrypted</string>
+    <string name="movie">Entity</string>
+
+    <!-- Error messages -->
+    <string name="error_fragment_message">Alice encountered a synchronization error</string>
+    <string name="dismiss_error">Dismiss</string>
+</resources>

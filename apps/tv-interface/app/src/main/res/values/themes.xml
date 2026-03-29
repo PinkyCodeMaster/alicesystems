@@ -1,0 +1,4 @@
+<resources>
+
+    <style name="Theme.Tvinterface" parent="@style/Theme.Leanback" />
+</resources>

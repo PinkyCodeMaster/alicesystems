@@ -21,6 +21,9 @@ Implemented in this prototype:
 - on-board status LED state machine on `GPIO2`
 - prototype Wi-Fi OTA after first USB flash
 - simple reconnect loop
+- persisted claimed runtime MQTT config in flash
+- prototype claim-complete call to Home OS provisioning API
+- serial `PROVISION`, `PRINT_CONFIG`, `PRINT_QR`, and `RESET_PROVISIONING` commands for bench bring-up
 
 Not implemented yet:
 
@@ -166,8 +169,47 @@ python -m platformio run -e esp32-sensor-node --target upload --upload-port COM5
 - no room assignment or provisioning yet
 - no offline queueing
 
+## Prototype Claim Flow
+
+This firmware now supports a prototype claim-capable path without breaking the current hardcoded bench workflow.
+
+What it does:
+
+- keeps compile-time Wi-Fi as the current network join path
+- accepts a bootstrap ID and claim token
+- calls `POST /api/v1/provisioning/claim/complete`
+- stores returned MQTT runtime config in flash using `Preferences`
+- reboots into claimed mode and uses the issued MQTT credentials afterward
+
+What it does not do yet:
+
+- QR scan on-device
+- local AP handoff from mobile
+- secure production provisioning
+
+### Serial Bring-Up Commands
+
+Open the serial monitor at `115200` and use:
+
+```text
+PRINT_CONFIG
+PRINT_QR
+PROVISION {"bootstrap_id":"boot_sensor_hall_01","claim_token":"<claim-token>"}
+RESET_PROVISIONING
+```
+
+`PROVISION` stores the temporary claim inputs and the board attempts claim completion on the next loop while connected to Wi-Fi.
+
+`PRINT_QR` emits the canonical Alice device QR JSON payload. For bench boards, paste that JSON into the mobile onboarding screen or generate a temporary QR image from it while you are still using USB instead of printed labels.
+
+`RESET_PROVISIONING` clears the persisted claimed runtime config and reboots back into compile-time bench mode.
+
 ## Next Steps
 
 - replace DHT11 with a better sensor in the production node
 - move from bench secrets to proper provisioning
 - port the proven logic into ESP-IDF runtime components
+
+Provisioning transition reference:
+
+- [esp32-provisioning-transition.md](e:/alicesystems/docs/device/esp32-provisioning-transition.md)

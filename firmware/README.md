@@ -5,3 +5,7 @@
 - Responsibilities: Run device capabilities reliably and securely while staying subordinate to Home OS authority.
 - Interfaces: MQTT for state and commands, HTTPS for provisioning and OTA, local sensors and actuators on hardware.
 - Status: in progress.
+
+## Current Transition Docs
+
+- [esp32-provisioning-transition.md](e:/alicesystems/docs/device/esp32-provisioning-transition.md): concrete migration path from hardcoded bench firmware to claimable onboarded devices

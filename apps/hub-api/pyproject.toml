@@ -12,6 +12,7 @@ dependencies = [
   "pydantic-settings>=2.2,<3.0",
   "PyJWT>=2.8,<3.0",
   "sqlalchemy>=2.0,<3.0",
+  "tzdata>=2024.1",
 ]
 
 [project.optional-dependencies]

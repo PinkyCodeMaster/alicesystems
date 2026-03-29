@@ -1,0 +1,4 @@
+<resources>
+
+    <style name="Theme.Carintegration" parent="android:Theme.Material.Light.DarkActionBar" />
+</resources>

@@ -16,12 +16,21 @@ export type User = {
 
 export type Device = {
   id: string;
+  room_id: string | null;
+  room_name?: string | null;
   name: string;
   model: string;
   device_type: string;
   status: string;
   fw_version: string | null;
   last_seen_at: string | null;
+};
+
+export type Room = {
+  id: string;
+  site_id: string;
+  name: string;
+  slug: string;
 };
 
 export type Entity = {
@@ -112,6 +121,33 @@ export type HealthResponse = {
   environment: string;
 };
 
+export type HubSetupStatus = {
+  setup_completed: boolean;
+  requires_onboarding: boolean;
+  site_id: string;
+  site_name: string;
+  timezone: string;
+  owner_count: number;
+  completed_at: string | null;
+  source: string;
+};
+
+export type HubSetupResponse = {
+  access_token: string;
+  token_type: string;
+  user_id: string;
+  display_name: string;
+  setup_completed: boolean;
+  site_id: string;
+  site_name: string;
+  timezone: string;
+  rooms: Array<{
+    id: string;
+    name: string;
+    slug: string;
+  }>;
+};
+
 export type HealthCheckState = {
   status: "checking" | "reachable" | "unreachable";
   message: string;
@@ -119,6 +155,7 @@ export type HealthCheckState = {
 
 export type DeviceEntity = {
   id: string;
+  room_id: string | null;
   capability_id: string;
   kind: string;
   name: string;
@@ -134,6 +171,16 @@ export type DeviceDetail = {
   device: Device;
   entities: DeviceEntity[];
   audit_events: AuditEvent[];
+};
+
+export type DeviceDeleteResponse = {
+  device_id: string;
+  removed: boolean;
+};
+
+export type DeviceUpdateRequest = {
+  name: string;
+  room_id: string | null;
 };
 
 export type AssistantDependencyStatus = {
@@ -198,6 +245,7 @@ export type AssistantStreamError = {
 };
 
 export const TOKEN_KEY = "alice.dashboard.token";
+export const HUB_SETUP_MEMORY_KEY = "alice.dashboard.hub_setup_completed";
 const DEFAULT_API_PORT = 8000;
 const DEFAULT_ASSISTANT_PORT = 8010;
 
@@ -272,10 +320,21 @@ export function formatCommandEventSummary(
 
 export function buildDashboardWebSocketUrl(
   apiBaseUrl: string,
-  token: string,
 ): string {
   const origin = apiBaseUrl.replace(/\/api\/v1$/, "");
-  return `${origin.replace(/^http/, "ws")}/api/v1/ws/dashboard?token=${encodeURIComponent(token)}`;
+  return `${origin.replace(/^http/, "ws")}/api/v1/ws/dashboard`;
+}
+
+export function authenticateDashboardWebSocket(
+  websocket: WebSocket,
+  token: string,
+) {
+  websocket.send(
+    JSON.stringify({
+      type: "authenticate",
+      token,
+    }),
+  );
 }
 
 export function getStatusVariant(status: string) {
@@ -340,6 +399,39 @@ export async function assistantFetch<T>(
   }
 
   return (await response.json()) as T;
+}
+
+export async function deleteDeviceRequest(
+  apiBaseUrl: string,
+  deviceId: string,
+  token: string,
+): Promise<DeviceDeleteResponse> {
+  return apiFetch<DeviceDeleteResponse>(apiBaseUrl, `/devices/${deviceId}`, token, {
+    method: "DELETE",
+  });
+}
+
+export async function updateDeviceRequest(
+  apiBaseUrl: string,
+  deviceId: string,
+  token: string,
+  payload: DeviceUpdateRequest,
+): Promise<Device> {
+  return apiFetch<Device>(apiBaseUrl, `/devices/${deviceId}`, token, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function createRoomRequest(
+  apiBaseUrl: string,
+  token: string,
+  name: string,
+): Promise<Room> {
+  return apiFetch<Room>(apiBaseUrl, "/rooms", token, {
+    method: "POST",
+    body: JSON.stringify({ name }),
+  });
 }
 
 export async function assistantStreamChat(

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 import json
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -19,7 +20,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     store = SessionStore(settings.session_store_path)
     service = AssistantService(gateway=gateway, settings=settings, store=store)
 
-    app = FastAPI(title=settings.app_name, version="0.1.0")
+    @asynccontextmanager
+    async def lifespan(_: FastAPI):
+        try:
+            yield
+        finally:
+            await gateway.aclose()
+
+    app = FastAPI(title=settings.app_name, version="0.1.0", lifespan=lifespan)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_allow_origins_list,
@@ -27,6 +35,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    app.state.gateway = gateway
+    app.state.assistant_service = service
+    app.state.session_store = store
 
     @app.get(f"{settings.api_v1_prefix}/health", response_model=HealthResponse)
     async def health() -> HealthResponse:

@@ -1,19 +1,18 @@
 from __future__ import annotations
 
-import asyncio
 from typing import Any
 
 import httpx
 
-from assistant_runtime.core.config import Settings, load_fallback_home_os_credentials
+from assistant_runtime.core.config import Settings, load_home_os_service_credentials
 from assistant_runtime.models import AuditEvent, AutoLightSettings, Device, DeviceDetail, DeviceDetailEntity, Entity, EntityState
 
 
 class HomeOsGateway:
-    def __init__(self, settings: Settings) -> None:
+    def __init__(self, settings: Settings, client: httpx.AsyncClient | None = None) -> None:
         self.settings = settings
-        self._token: str | None = None
-        self._lock = asyncio.Lock()
+        self._owns_client = client is None
+        self._client = client or httpx.AsyncClient(timeout=self.settings.home_os_timeout_seconds)
 
     async def list_devices(self) -> list[Device]:
         data = await self._get("/devices")
@@ -184,55 +183,35 @@ class HomeOsGateway:
         return await self._request("GET", path)
 
     async def _request(self, method: str, path: str, **kwargs) -> dict[str, Any]:
-        token = await self._get_token()
-        headers = kwargs.pop("headers", {})
+        headers = dict(kwargs.pop("headers", {}))
         headers["Accept"] = "application/json"
-        headers["Authorization"] = f"Bearer {token}"
+        headers.update(self._build_service_headers())
 
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.request(
-                method,
-                f"{self.settings.home_os_base_url}{path}",
-                headers=headers,
-                **kwargs,
-            )
-
-        if response.status_code == 401:
-            self._token = None
-            token = await self._get_token(force_refresh=True)
-            headers["Authorization"] = f"Bearer {token}"
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.request(
-                    method,
-                    f"{self.settings.home_os_base_url}{path}",
-                    headers=headers,
-                    **kwargs,
-                )
+        response = await self._client.request(
+            method,
+            f"{self.settings.home_os_base_url}{path}",
+            headers=headers,
+            **kwargs,
+        )
 
         response.raise_for_status()
         return response.json()
 
-    async def _get_token(self, *, force_refresh: bool = False) -> str:
-        async with self._lock:
-            if self._token is not None and not force_refresh:
-                return self._token
+    def _build_service_headers(self) -> dict[str, str]:
+        service_id, service_secret = load_home_os_service_credentials(self.settings)
+        if not service_secret:
+            raise RuntimeError(
+                "Assistant runtime is missing Home OS service credentials. "
+                "Set HOME_OS_SERVICE_SECRET or keep ASSISTANT_SERVICE_SECRET in apps/hub-api/.env."
+            )
+        return {
+            "X-Alice-Service-Id": service_id,
+            "X-Alice-Service-Secret": service_secret,
+        }
 
-            email, password = load_fallback_home_os_credentials(self.settings)
-            if not email or not password:
-                raise RuntimeError(
-                    "Assistant runtime is missing Home OS credentials. "
-                    "Set HOME_OS_EMAIL/HOME_OS_PASSWORD or keep DEFAULT_ADMIN_* in apps/hub-api/.env."
-                )
-
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.post(
-                    f"{self.settings.home_os_base_url}/auth/login",
-                    json={"email": email, "password": password},
-                    headers={"Accept": "application/json"},
-                )
-            response.raise_for_status()
-            self._token = response.json()["access_token"]
-            return self._token
+    async def aclose(self) -> None:
+        if self._owns_client:
+            await self._client.aclose()
 
     def _to_auto_light_settings(self, data: dict[str, Any]) -> AutoLightSettings:
         return AutoLightSettings(

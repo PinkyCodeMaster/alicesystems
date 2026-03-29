@@ -1,0 +1,17 @@
+.git
+.gitignore
+**/.git
+**/.alice
+**/.pytest_cache
+**/.tmp-pytest
+**/.tmp-pytest-run
+**/.venv
+**/__pycache__
+**/*.pyc
+**/node_modules
+**/.next
+**/.expo
+**/data
+**/logs
+**/dist
+**/build

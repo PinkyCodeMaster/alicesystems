@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useEffect, useEffectEvent, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useEffectEvent, useMemo, useState } from "react";
 import {
   Activity,
   Bot,
@@ -14,6 +14,7 @@ import {
 
 import { AppShell } from "@/components/dashboard/app-shell";
 import { AuditFeed } from "@/components/dashboard/audit-feed";
+import { HubSetupCard } from "@/components/dashboard/hub-setup-card";
 import { LoginCard } from "@/components/dashboard/login-card";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -29,6 +30,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   apiFetch,
+  authenticateDashboardWebSocket,
   assistantFetch,
   AuditEvent,
   AutoLightSettings,
@@ -42,6 +44,8 @@ import {
   formatUserSubtitle,
   HealthCheckState,
   HealthResponse,
+  HubSetupResponse,
+  HubSetupStatus,
   LoginResponse,
   resolveApiBaseUrl,
   resolveAssistantBaseUrl,
@@ -53,12 +57,25 @@ import { useDashboardToken } from "@/hooks/use-dashboard-token";
 export default function OverviewPage() {
   const apiBaseUrl = useMemo(() => resolveApiBaseUrl(), []);
   const assistantBaseUrl = useMemo(() => resolveAssistantBaseUrl(), []);
-  const { token, tokenReady, storeToken, clearToken } = useDashboardToken();
+  const { token, tokenReady, hubSetupRemembered, storeToken, clearToken, rememberHubSetup } = useDashboardToken();
 
-  const [loginEmail, setLoginEmail] = useState("admin@alice.systems");
-  const [loginPassword, setLoginPassword] = useState("change-me");
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
   const [loginError, setLoginError] = useState<string | null>(null);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [setupSiteName, setSetupSiteName] = useState("Alice Home");
+  const [setupTimezone, setSetupTimezone] = useState("Europe/London");
+  const [setupOwnerEmail, setSetupOwnerEmail] = useState("");
+  const [setupOwnerDisplayName, setSetupOwnerDisplayName] = useState("");
+  const [setupPassword, setSetupPassword] = useState("");
+  const [setupPasswordConfirm, setSetupPasswordConfirm] = useState("");
+  const [setupRoomNames, setSetupRoomNames] = useState(
+    "Living Room, Kitchen, Dining Room, Downstairs Bathroom, Upstairs Bathroom, Master Bedroom, Kids Room",
+  );
+  const [setupError, setSetupError] = useState<string | null>(null);
+  const [isSettingUp, setIsSettingUp] = useState(false);
+  const [setupStatus, setSetupStatus] = useState<HubSetupStatus | null>(null);
+  const [setupStatusReady, setSetupStatusReady] = useState(false);
 
   const [hubHealth, setHubHealth] = useState<HealthCheckState>({
     status: "checking",
@@ -144,6 +161,37 @@ export default function OverviewPage() {
     };
   }, [apiBaseUrl, assistantBaseUrl]);
 
+  const loadSetupStatus = useCallback(async () => {
+    try {
+      const response = await fetch(`${apiBaseUrl}/system/setup-status`, {
+        headers: { Accept: "application/json" },
+      });
+      if (!response.ok) {
+        throw new Error(`${response.status} ${response.statusText}`);
+      }
+      const body = (await response.json()) as HubSetupStatus;
+      setSetupStatus(body);
+      setSetupSiteName(body.site_name || "Alice Home");
+      setSetupTimezone(body.timezone || "Europe/London");
+      if (!body.requires_onboarding) {
+        setSetupError(null);
+        rememberHubSetup(true);
+      }
+    } catch (nextError) {
+      setSetupStatus(null);
+      setSetupError(
+        nextError instanceof Error ? nextError.message : "Failed to load setup status",
+      );
+    } finally {
+      setSetupStatusReady(true);
+    }
+  }, [apiBaseUrl, rememberHubSetup]);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => void loadSetupStatus(), 0);
+    return () => window.clearTimeout(timeout);
+  }, [loadSetupStatus]);
+
   const loadOverview = useEffectEvent(async () => {
     if (!token) {
       setUser(null);
@@ -226,7 +274,8 @@ export default function OverviewPage() {
       return;
     }
 
-    const websocket = new WebSocket(buildDashboardWebSocketUrl(apiBaseUrl, token));
+    const websocket = new WebSocket(buildDashboardWebSocketUrl(apiBaseUrl));
+    websocket.onopen = () => authenticateDashboardWebSocket(websocket, token);
     websocket.onmessage = (event) => {
       try {
         const payload = JSON.parse(event.data) as { type?: string };
@@ -260,7 +309,12 @@ export default function OverviewPage() {
       });
 
       if (!response.ok) {
-        throw new Error(await response.text());
+        const detail = await response.text();
+        if (response.status === 409) {
+          rememberHubSetup(false);
+          await loadSetupStatus();
+        }
+        throw new Error(detail);
       }
 
       const body = (await response.json()) as LoginResponse;
@@ -269,6 +323,60 @@ export default function OverviewPage() {
       setLoginError(nextError instanceof Error ? nextError.message : "Login failed");
     } finally {
       setIsLoggingIn(false);
+    }
+  };
+
+  const setupHub = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (setupPassword !== setupPasswordConfirm) {
+      setSetupError("Passwords do not match.");
+      return;
+    }
+
+    setIsSettingUp(true);
+    setSetupError(null);
+
+    try {
+      const response = await fetch(`${apiBaseUrl}/system/setup`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({
+          site_name: setupSiteName,
+          timezone: setupTimezone,
+          owner_email: setupOwnerEmail,
+          owner_display_name: setupOwnerDisplayName,
+          password: setupPassword,
+          room_names: setupRoomNames
+            .split(",")
+            .map((name) => name.trim())
+            .filter(Boolean),
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(await response.text());
+      }
+
+      const body = (await response.json()) as HubSetupResponse;
+      setSetupStatus({
+        setup_completed: body.setup_completed,
+        requires_onboarding: false,
+        site_id: body.site_id,
+        site_name: body.site_name,
+        timezone: body.timezone,
+        owner_count: 1,
+        completed_at: new Date().toISOString(),
+        source: "db",
+      });
+      rememberHubSetup(true);
+      storeToken(body.access_token);
+    } catch (nextError) {
+      setSetupError(nextError instanceof Error ? nextError.message : "Hub setup failed");
+    } finally {
+      setIsSettingUp(false);
     }
   };
 
@@ -281,7 +389,48 @@ export default function OverviewPage() {
     )
     .slice(0, 5);
 
-  if (!token && tokenReady) {
+  if (!tokenReady || !setupStatusReady) {
+    return (
+      <main className="min-h-screen bg-background">
+        <div className="mx-auto flex min-h-screen max-w-6xl items-center justify-center px-4">
+          <div className="grid w-full max-w-2xl gap-4 md:grid-cols-2">
+            <Skeleton className="h-48 rounded-3xl" />
+            <Skeleton className="h-48 rounded-3xl" />
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  if (!token && !hubSetupRemembered && setupStatus?.requires_onboarding) {
+    return (
+      <HubSetupCard
+        apiBaseUrl={apiBaseUrl}
+        assistantBaseUrl={assistantBaseUrl}
+        siteName={setupSiteName}
+        timezone={setupTimezone}
+        ownerEmail={setupOwnerEmail}
+        ownerDisplayName={setupOwnerDisplayName}
+        password={setupPassword}
+        passwordConfirm={setupPasswordConfirm}
+        roomNames={setupRoomNames}
+        setupError={setupError}
+        isSubmitting={isSettingUp}
+        hubHealth={hubHealth}
+        assistantHealth={assistantHealth}
+        onSubmit={setupHub}
+        onSiteNameChange={setSetupSiteName}
+        onTimezoneChange={setSetupTimezone}
+        onOwnerEmailChange={setSetupOwnerEmail}
+        onOwnerDisplayNameChange={setSetupOwnerDisplayName}
+        onPasswordChange={setSetupPassword}
+        onPasswordConfirmChange={setSetupPasswordConfirm}
+        onRoomNamesChange={setSetupRoomNames}
+      />
+    );
+  }
+
+  if (!token) {
     return (
       <LoginCard
         apiBaseUrl={apiBaseUrl}
@@ -301,8 +450,8 @@ export default function OverviewPage() {
 
   return (
     <AppShell
-      title="House overview"
-      description="Operational summary of the local Alice stack, with dedicated routes for assistant, devices, automation, and audit."
+      title="Alice hub"
+      description="Advanced control for this local Alice home, including devices, automation review, audit history, and assistant sessions."
       subtitle={formatUserSubtitle(user)}
       onLogout={clearToken}
     >
@@ -325,7 +474,7 @@ export default function OverviewPage() {
           <CardHeader>
             <CardTitle>Stack health</CardTitle>
             <CardDescription>
-              API, broker, devices, and the latest command request/ack.
+              API, broker, connected devices, and the latest command activity.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -419,7 +568,7 @@ export default function OverviewPage() {
           <CardHeader>
             <CardTitle>Reachability</CardTitle>
             <CardDescription>
-              Browser connectivity to both hub and assistant runtimes.
+              Browser reachability to the local hub and assistant runtimes.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -456,7 +605,7 @@ export default function OverviewPage() {
               <Bot className="h-4 w-4" />
               Assistant
             </CardTitle>
-            <CardDescription>Live session memory and tool traces.</CardDescription>
+            <CardDescription>Review live assistant sessions and current context.</CardDescription>
           </CardHeader>
           <CardContent>
             <Link href="/assistant">
@@ -471,7 +620,7 @@ export default function OverviewPage() {
               <Cpu className="h-4 w-4" />
               Devices
             </CardTitle>
-            <CardDescription>Hardware list and current entity state.</CardDescription>
+            <CardDescription>Review the household device inventory and live state.</CardDescription>
           </CardHeader>
           <CardContent>
             <Link href="/devices">
@@ -486,9 +635,9 @@ export default function OverviewPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Settings2 className="h-4 w-4" />
-              Auto-light
+              Automation
             </CardTitle>
-            <CardDescription>Thresholds, mapping, and automation state.</CardDescription>
+            <CardDescription>Open the current advanced automation controls.</CardDescription>
           </CardHeader>
           <CardContent>
             <Link href="/automations/auto-light">
@@ -505,7 +654,7 @@ export default function OverviewPage() {
               <DoorOpen className="h-4 w-4" />
               Audit
             </CardTitle>
-            <CardDescription>Recent state changes, commands, and acknowledgements.</CardDescription>
+            <CardDescription>Review recent actions, state changes, and acknowledgements.</CardDescription>
           </CardHeader>
           <CardContent>
             <Link href="/audit">
@@ -522,7 +671,7 @@ export default function OverviewPage() {
           <CardHeader>
             <CardTitle>Automation snapshot</CardTitle>
             <CardDescription>
-              Current canonical auto-light state from Home OS.
+              Current advanced automation state from the hub.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-2 text-sm text-muted-foreground">

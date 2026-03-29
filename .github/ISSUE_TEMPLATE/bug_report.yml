@@ -1,0 +1,42 @@
+name: Bug report
+description: Report a broken or misleading Alice experience.
+title: "[Bug]: "
+labels:
+  - bug
+  - triage
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened?
+      description: Describe the observed behavior and the expected Alice behavior.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: Include commands, screens, endpoints, MQTT topics, or device actions.
+      placeholder: |
+        1. Start the local backend with tools/dev/start-local-backend.ps1
+        2. Open the mobile or web flow
+        3. Trigger the issue
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, app surface, branch/commit, and any relevant local setup details.
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: Paste trimmed logs or screenshots. Redact secrets before submitting.
+    validations:
+      required: false

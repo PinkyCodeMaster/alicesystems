@@ -20,6 +20,9 @@ class UserService:
     def get_by_id(self, user_id: str) -> User | None:
         return self.repo.get_by_id(user_id=user_id)
 
+    def has_any_users(self) -> bool:
+        return self.repo.count_all() > 0
+
     def ensure_default_admin(self, *, site_id: str) -> User:
         settings = get_settings()
         target_email = settings.default_admin_email.strip().lower()
@@ -72,3 +75,31 @@ class UserService:
 
         created = self.ensure_default_admin(site_id=site_id)
         return created, "created_additional_admin"
+
+    def create_initial_owner(
+        self,
+        *,
+        site_id: str,
+        email: str,
+        display_name: str,
+        password: str,
+    ) -> User:
+        normalized_email = email.strip().lower()
+        if self.has_any_users():
+            raise ValueError("Hub setup has already been completed.")
+        if self.repo.get_by_email(normalized_email) is not None:
+            raise ValueError("A user with that email already exists.")
+
+        now = datetime.now(UTC).replace(tzinfo=None)
+        user = User(
+            id=f"usr_{uuid4().hex[:12]}",
+            site_id=site_id,
+            email=normalized_email,
+            display_name=display_name.strip(),
+            role="admin",
+            password_hash=hash_password(password),
+            is_active=1,
+            created_at=now,
+            updated_at=now,
+        )
+        return self.repo.create(user)

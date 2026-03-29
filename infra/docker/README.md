@@ -11,6 +11,7 @@
 Implemented now:
 
 - `docker-compose.yml` with a local Mosquitto service
+- `docker-compose.practice.yml` with a rehearsal stack for hub onboarding plus two mock claimable devices
 
 Start command:
 
@@ -18,3 +19,20 @@ Start command:
 cd E:\alicesystems\infra\scripts
 .\mqtt-up.ps1
 ```
+
+Practice stack:
+
+```powershell
+cd E:\alicesystems\infra\scripts
+.\practice-up.ps1
+```
+
+That stack publishes:
+
+- dashboard on `3000`
+- hub API on `8000`
+- assistant on `8010`
+- mock sensor setup endpoint on `48081`
+- mock relay setup endpoint on `48082`
+
+See [practice/README.md](e:/alicesystems/infra/docker/practice/README.md) for the claim rehearsal flow.
